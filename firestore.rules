@@ -1,0 +1,61 @@
+rules_version = '2';
+// 伶髮藝線上預約 Firestore 安全規則
+// 店家帳號：只有這個 Email 登入後能管理預約與設定
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email in ['yoyo20121117@gmail.com'];
+    }
+    function activeStatus(s) { return s in ['pending', 'confirmed']; }
+
+    // 店家設定（公休日、付款方式、集點規則）：大家可讀，只有店家能改
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 完整預約資料：知道隨機編號才能讀單筆；只有店家能列出全部
+    match /bookings/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        || (request.resource.data.status == 'pending' && request.resource.data.source == 'online');
+      allow update: if isAdmin()
+        || (activeStatus(resource.data.status)
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']));
+      allow delete: if isAdmin();
+    }
+
+    // 空檔資料：只有日期、時間、狀態、代碼，沒有姓名電話，給客人判斷哪些時段可選
+    match /avail/{id} {
+      allow read: if true;
+      allow create: if isAdmin()
+        || (request.resource.data.status == 'pending'
+            && request.resource.data.keys().hasOnly(['date', 'time', 'status', 'code']));
+      allow update: if isAdmin()
+        || (activeStatus(resource.data.status)
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+      allow delete: if isAdmin();
+    }
+
+    // 用手機號碼雜湊找回自己的預約編號
+    match /lookup/{key} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if request.resource.data.keys().hasOnly(['ids'])
+        && request.resource.data.ids.size() <= 200;
+      allow delete: if isAdmin();
+    }
+
+    // 會員：文件編號是手機號碼雜湊；客人只能新建 0 點的會員，蓋點和兌換只有店家能做
+    match /members/{key} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        || (request.resource.data.points == 0 && request.resource.data.history.size() == 0);
+      allow update, delete: if isAdmin();
+    }
+  }
+}

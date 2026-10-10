@@ -1,0 +1,662 @@
+<title>伶髮藝線上預約</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: one phone-width column; dark espresso header like the LINE DM, cream menu cards, sticky bottom bar carrying the selection */
+:root{
+  --espresso:#2b1d16; --espresso-2:#3d2a1f; --gold:#b8894f; --gold-soft:#d9b98a;
+  --bg:#efe7dc; --card:#f8f3ec; --line:#ddd0bf; --ink:#2b1d16; --ink-2:#6d5a4b;
+  --on-dark:#f3e6d3; --ok:#4f7a4a; --danger:#a5452f;
+  --f-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --espresso:#1a120d; --espresso-2:#2a1d15; --gold:#d0a56b; --gold-soft:#e2c597;
+  --bg:#15100c; --card:#221913; --line:#3a2c22; --ink:#f0e4d4; --ink-2:#b5a08b;
+  --on-dark:#f3e6d3; --ok:#86b07e; --danger:#e08a73; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --espresso:#1a120d; --espresso-2:#2a1d15; --gold:#d0a56b; --gold-soft:#e2c597;
+  --bg:#15100c; --card:#221913; --line:#3a2c22; --ink:#f0e4d4; --ink-2:#b5a08b;
+  --on-dark:#f3e6d3; --ok:#86b07e; --danger:#e08a73; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:0 120px}
+header.top{background:var(--espresso);color:var(--on-dark);padding:22px 16px 0;text-align:center}
+.logo{display:block;width:120px;height:120px;margin:0 auto 8px;border-radius:50%;box-shadow:0 0 0 3px var(--gold)}
+.brand{font-family:var(--f-display);font-size:26px;letter-spacing:.18em;color:var(--gold-soft);margin:0}
+.tag{font-size:12px;letter-spacing:.3em;color:var(--on-dark);opacity:.75;margin:2px 0 14px}
+nav.tabs{display:flex;max-width:560px;margin:0 auto}
+nav.tabs button{flex:1;background:none;border:0;color:var(--on-dark);opacity:.6;font:inherit;font-size:14px;padding:12px 2px;border-bottom:3px solid transparent;cursor:pointer}
+nav.tabs button[aria-selected="true"]{opacity:1;border-bottom-color:var(--gold);color:var(--gold-soft)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,.chip:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+h2.sec{font-family:var(--f-display);font-size:21px;letter-spacing:.12em;margin:28px 0 4px;display:flex;align-items:center;gap:10px}
+h2.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+.sec-note{color:var(--ink-2);font-size:13px;margin:0 0 12px}
+.list{display:grid;gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.card.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.row{display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+.name{font-family:var(--f-display);font-size:18px;font-weight:700;min-width:0}
+.price{font-family:var(--f-display);font-size:19px;color:var(--gold);white-space:nowrap;font-variant-numeric:tabular-nums}
+.price small{font-size:12px;margin-left:2px}
+.inc{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px}
+.inc li{font-size:12px;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
+.inc li b{font-weight:500;color:var(--gold)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{font:inherit;font-size:14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--espresso);color:var(--gold-soft);border-color:var(--espresso)}
+.chip:disabled{opacity:.35;cursor:not-allowed;text-decoration:line-through}
+.pick{margin-top:10px;font:inherit;font-size:14px;border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:999px;padding:5px 14px;cursor:pointer}
+.card.sel .pick{background:var(--gold);color:var(--espresso)}
+.simple{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
+.simple .name{font-size:16px;flex:1}
+.box{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--gold);flex:none;display:grid;place-items:center;color:var(--espresso);font-size:14px}
+.card.sel .box{background:var(--gold)}
+.fine{font-size:12px;color:var(--ink-2);margin:8px 0 0}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--espresso);color:var(--on-dark);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));z-index:5}
+.bar-in{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.bar-info{flex:1;min-width:0;font-size:13px}
+.bar-info strong{display:block;font-family:var(--f-display);font-size:20px;color:var(--gold-soft);font-variant-numeric:tabular-nums}
+.btn{font:inherit;font-weight:700;border:0;border-radius:999px;padding:11px 22px;background:var(--gold);color:#2b1d16;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:var(--danger);color:#fff}
+.dates{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x mandatory}
+.date{flex:none;width:64px;scroll-snap-align:start;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:8px 0;text-align:center;font:inherit;cursor:pointer}
+.date .d{display:block;font-family:var(--f-display);font-size:22px;line-height:1.2}
+.date .w{font-size:12px;color:var(--ink-2)}
+.date[aria-pressed="true"]{background:var(--espresso);border-color:var(--espresso);color:var(--gold-soft)}
+.date[aria-pressed="true"] .w{color:var(--on-dark)}
+.date:disabled{opacity:.35;cursor:not-allowed}
+.times{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.times .chip{border-radius:10px;padding:8px 0;text-align:center}
+label.f{display:block;font-size:13px;color:var(--ink-2);margin:14px 0 4px}
+input.t,textarea.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+textarea.t{min-height:70px;resize:vertical}
+.err{color:var(--danger);font-size:13px;margin:6px 0 0}
+.sum{margin:0;padding:0;list-style:none}
+.sum li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line);font-variant-numeric:tabular-nums}
+.sum li:last-child{border-bottom:0}
+.total{display:flex;justify-content:space-between;font-family:var(--f-display);font-size:18px;margin-top:8px}
+.total span:last-child{color:var(--gold)}
+.ticket{text-align:center;padding:26px 18px}
+.code{font-family:var(--f-display);font-size:34px;letter-spacing:.2em;color:var(--gold);margin:6px 0}
+.status{font-size:12px;border-radius:999px;padding:1px 10px;white-space:nowrap}
+.status.on{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.status.off{background:color-mix(in srgb,var(--ink-2) 18%,transparent);color:var(--ink-2)}
+.status.past{background:color-mix(in srgb,var(--gold) 18%,transparent);color:var(--gold)}
+.meta{color:var(--ink-2);font-size:13px;margin:4px 0 0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.confirm{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--danger) 10%,transparent);font-size:14px}
+.stamps{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0 6px}
+.stamp{aspect-ratio:1;max-width:100%;border-radius:50%;border:1.5px dashed var(--gold);display:grid;place-items:center;font-family:var(--f-display);color:var(--ink-2);font-size:15px}
+.stamp.on{background:var(--gold);border-style:solid;color:#2b1d16;font-size:20px}
+.stamp.gift{border-style:solid}
+.mcard{background:var(--espresso);color:var(--on-dark);border-radius:16px;padding:18px 16px}
+.mcard .name{color:var(--gold-soft)}
+.mcard .stamp{color:var(--on-dark)}
+.mcard .meta{color:var(--on-dark);opacity:.75}
+select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+.qr{display:block;width:200px;max-width:100%;margin:10px auto 0;border-radius:10px;background:#fff;padding:8px}
+.payrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-bottom:1px dashed var(--line)}
+.payrow:last-child{border-bottom:0}
+.payrow .lbl{flex:1;min-width:0;font-size:15px}
+.payrow img{width:44px;height:44px;border-radius:6px;background:#fff;object-fit:contain}
+.upl{font-size:13px;color:var(--gold);cursor:pointer;border:1px solid var(--gold);border-radius:999px;padding:3px 10px}
+.upl input{display:none}
+.subtabs{display:flex;flex-wrap:wrap;gap:8px;padding:16px 0 4px}
+.subtabs .chip{flex:none}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:10px}
+.cw{text-align:center;font-size:12px;color:var(--ink-2)}
+.cday{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;min-height:52px;padding:4px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;min-width:0}
+.cday .n{font-variant-numeric:tabular-nums}
+.cday.today{border-color:var(--gold)}
+.cday.sel{background:var(--espresso);color:var(--gold-soft);border-color:var(--espresso)}
+.cday.closed{opacity:.5}
+.tag-s{font-size:11px;color:var(--ink-2)}
+.dots{display:flex;gap:2px}
+.dc,.dp{font-style:normal;font-size:11px;line-height:16px;min-width:16px;padding:0 3px;border-radius:8px;text-align:center}
+.dc{background:var(--ok);color:#fff}
+.dp{background:var(--gold);color:#2b1d16}
+.legend{font-size:12px;color:var(--ink-2);margin:8px 0 0}
+.notice{margin:14px 0 0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--gold) 18%,transparent);font-size:14px}
+.card.dim{opacity:.55}
+.chk{display:flex;gap:8px;align-items:center;margin-top:14px;font-size:14px}
+.empty{text-align:center;color:var(--ink-2);padding:28px 10px}
+.hours{font-size:13px;color:var(--ink-2);margin:14px 0 0;text-align:center}
+@media (prefers-reduced-motion:no-preference){.card,.chip,.date{transition:background .15s,border-color .15s}}
+</style>
+
+<header class="top">
+  <img class="logo" src="data:image/webp;base64,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" alt="伶髮藝工作室 Ling 夜間洗髮" width="120" height="120">
+  <p class="tag">線上預約 · 洗護 · 燙髮 · 染髮</p>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-menu" aria-selected="true" data-view="menu">價目表</button>
+    <button role="tab" id="tab-book" aria-selected="false" data-view="book">預約時間</button>
+    <button role="tab" id="tab-mine" aria-selected="false" data-view="mine">查詢／取消</button>
+    <button role="tab" id="tab-member" aria-selected="false" data-view="member">會員集點</button>
+  </nav>
+</header>
+
+<main class="wrap">
+  <section id="v-menu"></section>
+  <section id="v-book" hidden></section>
+  <section id="v-mine" hidden></section>
+  <section id="v-member" hidden></section>
+  <section id="v-admin" hidden></section>
+</main>
+
+<div class="bar" id="bar">
+  <div class="bar-in">
+    <div class="bar-info"><span id="bar-count">尚未選擇項目</span><strong id="bar-total">$0</strong></div>
+    <button class="btn" id="bar-next" disabled>選擇時間</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ===== 店家設定：營業時間、可同時服務人數、可預約天數 ===== */
+/* ===== 功能開關：會員集點、電子支付 ===== */
+const F = { member:true, pay:true };
+/* ===== 雲端資料庫：貼上 Firebase 的 firebaseConfig 就改用雲端；留空（null）則存在本機瀏覽器，僅供展示 ===== */
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyBhYqJT8IZ04bpdePEJEJXHfZVFdnU3OfI", "authDomain": "ling-hair.firebaseapp.com", "projectId": "ling-hair", "storageBucket": "ling-hair.firebasestorage.app", "messagingSenderId": "683141416876", "appId": "1:683141416876:web:909be74fd4c191198b9c09"};
+const CLOUD = !!(FIREBASE_CONFIG && window.firebase);
+let fdb=null,fauth=null,isAdmin=false,CACHE=[],CACHE_M={},lastFound=[];
+if(CLOUD){firebase.initializeApp(FIREBASE_CONFIG);fdb=firebase.firestore();fauth=firebase.auth()}
+async function sha(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("ling|"+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+const SHOP = { open:"13:00", close:"22:00" /* 最後收客時間 */, step:30, capacity:2, days:21, closedWeekdays:[] /* 例：[1] = 週一公休 */, closedDates:[] /* 例：["2026-10-10"] */,
+  goal:10 /* 集滿幾點可兌換 */, reward:"w500" /* 兌換贈送的項目 */,
+  pay:["cash","linepay","twpay"] /* 店家接受的付款方式 */, qr:{} /* 各付款方式的收款碼圖片 */ };
+const PAYS=[["cash","現金"],["linepay","LINE Pay"],["twpay","台灣Pay"],["jkopay","街口支付"],["pxpay","全支付"],["easywallet","悠遊付"],["icashpay","icash Pay"],["card","信用卡"],["transfer","銀行轉帳"]];
+const payName=id=>(PAYS.find(p=>p[0]===id)||[,id])[1];
+const SKEY="salon-settings-v1";
+function applySettings(s){if(s){SHOP.closedWeekdays=s.closedWeekdays||[];SHOP.closedDates=s.closedDates||[];if(s.reward)SHOP.reward=s.reward;if(s.goal)SHOP.goal=s.goal;if(s.pay)SHOP.pay=s.pay;if(s.qr)SHOP.qr=s.qr}}
+if(!CLOUD){try{applySettings(JSON.parse(localStorage.getItem(SKEY)||"null"))}catch(e){}}
+function saveSettings(){const v={closedWeekdays:SHOP.closedWeekdays,closedDates:SHOP.closedDates,reward:SHOP.reward,goal:SHOP.goal,pay:SHOP.pay,qr:SHOP.qr};
+  if(CLOUD){fdb.collection("config").doc("shop").set(v).catch(e=>console.warn("設定儲存失敗",e));return}
+  try{localStorage.setItem(SKEY,JSON.stringify(v))}catch(e){}}
+const isClosed=(d,k)=>SHOP.closedWeekdays.includes(d.getDay())||SHOP.closedDates.includes(k);
+
+/* ===== 價目表（依 LINE DM） ===== */
+const WASH = [
+  {id:"w500",name:"小資舒壓洗",price:500,inc:[["肩頸按摩",5],["舒壓洗",10],["瞬間護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+  {id:"w800",name:"精油舒壓洗",price:800,inc:[["多特瑞精油舒壓",10],["舒壓洗",10],["瞬間護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1000",name:"放鬆舒壓洗",price:1000,inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["頭部放鬆按摩"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1200",name:"頭皮舒壓洗",price:1200,inc:[["多特瑞舒壓",15],["頭皮按摩舒壓",15],["舒壓放鬆洗",15],["清爽頭部按摩"],["肩頸熱敷按摩"],["精華液"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1500",name:"頭皮SPA洗",price:1500,inc:[["多特瑞精油舒壓",15],["頭皮按摩舒壓",15],["頭皮去角質"],["SPA舒壓洗",15],["瞬間護髮"],["肩頸熱敷按摩"],["精華液"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1800",name:"頂級溫感SPA舒壓洗",price:1800,inc:[["多特瑞精油舒壓",15],["溫感舒壓按摩",15],["頭皮按摩舒壓",15],["SPA舒壓洗",15],["胜肽蛋白護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+];
+const LENGTHS = ["短髮","中長","長髮","特長"];
+const CARE = [
+  {id:"c1",name:"璀璨光分子髮膜護",prices:[1200,1400,1600,1800],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["璀璨光分子護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮洗",300],["接髮護",300]]},
+  {id:"c2",name:"光感公主護髮",prices:[1500,1700,1900,2100],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["光感公主護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮增收",300],["接髮護增收",400]]},
+  {id:"c3",name:"結構式系統護髮",prices:[2200,2500,2800,3100],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["修護基底"],["補充膠原蛋白"],["調理髮絲"],["蒸氣修護"],["換光鎖水防護"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮洗增收",300],["接髮護增收",500]]},
+];
+const PERM = [
+  {id:"p1",name:"冷塑燙",price:2800,up:true},{id:"p2",name:"溫塑燙",price:3500,up:true},{id:"p3",name:"縮毛矯正",price:3500,up:true},
+  {id:"p4",name:"燙前防護",price:600},{id:"p5",name:"燙後修護",price:600},{id:"p6",name:"加購結構式系統護優惠",price:1999},
+];
+const DYE = [
+  {id:"d1",name:"染髮・短髮",price:2800,up:true,desc:"全頭染色"},{id:"d2",name:"染髮・中長髮",price:3800,up:true,desc:"肩膀至胸口長度"},
+  {id:"d3",name:"染髮・長髮",price:4300,up:true,desc:"胸口以下長髮"},{id:"d4",name:"漂髮單次",price:2000,up:true,desc:"為特殊色打底"},
+  {id:"d5",name:"補染髮根",price:2000,up:true,desc:"新生髮根補染"},{id:"d6",name:"染前防護",price:600},{id:"d7",name:"染後修護",price:600},
+];
+const ADDON = [
+  {id:"a1",name:"肩頸按摩 20分",price:400},{id:"a2",name:"溫感深層放鬆 20分",price:500},{id:"a3",name:"清爽頭皮按摩",price:400},
+  {id:"a4",name:"胜肽蛋白水療護髮",price:400},{id:"a5",name:"髮絲大掃除",price:500},{id:"a6",name:"髮色矯正洗髮",price:600},
+  {id:"a7",name:"接髮洗增收",price:300},{id:"a8",name:"護色洗髮精",price:200},{id:"a9",name:"電棒／離子夾",price:200},
+  {id:"a10",name:"國小以下剪髮",price:400},{id:"a11",name:"國中以上剪髮",price:600},{id:"a12",name:"國中以下洗髮（無按摩）",price:400},
+];
+
+/* ===== 儲存（此版本存在本機瀏覽器） ===== */
+const KEY="salon-bookings-v1"; let memStore=[];
+function load(){if(CLOUD)return CACHE.slice();try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):memStore}catch(e){return memStore}}
+function save(list){memStore=list;try{localStorage.setItem(KEY,JSON.stringify(list))}catch(e){}}
+/* 雲端：bookings 存完整資料（只有店家能列出）；avail 只放日期、時間、狀態、代碼，給客人判斷空檔；lookup 用手機雜湊找回自己的預約 */
+async function addBooking(b){
+  if(!CLOUD){const l=load();l.push(b);save(l);return b}
+  const ref=fdb.collection("bookings").doc();b.id=ref.id;const batch=fdb.batch();
+  batch.set(ref,b);
+  batch.set(fdb.collection("avail").doc(ref.id),{date:b.date,time:b.time,status:b.status,code:b.code});
+  batch.set(fdb.collection("lookup").doc(await sha(b.phone)),{ids:firebase.firestore.FieldValue.arrayUnion(ref.id)},{merge:true});
+  await batch.commit();return b}
+async function changeStatus(b,st){const t=new Date().toISOString();
+  if(!CLOUD){const l=load(),x=l.find(y=>y.code===b.code&&y.date===b.date&&y.time===b.time&&isActive(y));if(x){x.status=st;x[st+"At"]=t;save(l)}return}
+  const batch=fdb.batch();
+  batch.update(fdb.collection("bookings").doc(b.id),{status:st,[st+"At"]:t});
+  batch.update(fdb.collection("avail").doc(b.id),{status:st});
+  await batch.commit()}
+function refresh(){if(view==="menu")renderMenu();if(view==="book"&&!lastBooking)keepForm(renderBook);
+  if(view==="admin"&&(adminTab==="cal"||(CLOUD&&!isAdmin)))renderAdmin()}
+function startCloud(){if(!CLOUD)return;let unsub=null;
+  fdb.collection("config").doc("shop").onSnapshot(d=>{if(d.exists)applySettings(d.data());refresh()},e=>console.warn(e));
+  fauth.onAuthStateChanged(async u=>{if(unsub)unsub();isAdmin=false;
+    if(u){try{await fdb.collection("bookings").limit(1).get();isAdmin=true}catch(e){isAdmin=false;adminLoginErr="這個帳號沒有店家權限。";fauth.signOut()}}
+    const since=ymd(new Date(Date.now()-90*864e5));
+    unsub=fdb.collection(isAdmin?"bookings":"avail").where("date",">=",since).onSnapshot(q=>{CACHE=q.docs.map(d=>({id:d.id,...d.data()}));refresh()},e=>console.warn(e));
+    refresh()})}
+
+/* ===== 狀態 ===== */
+const sel = { wash:null, care:{}, perm:new Set(), dye:new Set(), addon:new Set() }; // care: {id:{len, ext:Set}}
+let pickPay=null;
+let pickDate=null, pickTime=null, lastBooking=null, view="menu";
+
+const $=s=>document.querySelector(s);
+const money=n=>"$"+n.toLocaleString("en-US");
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const incHTML=inc=>`<ul class="inc">${inc.map(([n,m])=>`<li>${n}${m?` <b>${m}分</b>`:""}</li>`).join("")}</ul>`;
+
+function chosenItems(){
+  const out=[];
+  if(sel.wash){const w=WASH.find(x=>x.id===sel.wash);out.push({name:w.name,price:w.price})}
+  for(const c of CARE){const s=sel.care[c.id];if(!s)continue;
+    out.push({name:`${c.name}（${LENGTHS[s.len]}）`,price:c.prices[s.len]});}
+  for(const [arr,set] of [[PERM,sel.perm],[DYE,sel.dye],[ADDON,sel.addon]])
+    arr.forEach(x=>{if(set.has(x.id))out.push({name:x.name,price:x.price,up:!!x.up})});
+  return out;
+}
+function totals(items){return {sum:items.reduce((a,b)=>a+b.price,0),up:items.some(i=>i.up)}}
+
+/* ===== 價目表畫面 ===== */
+function simpleCard(x,set){
+  const on=set.has(x.id);
+  return `<div class="card simple${on?" sel":""}" role="checkbox" tabindex="0" aria-checked="${on}" data-toggle="${x.id}">
+    <span class="box">${on?"✓":""}</span>
+    <span class="name">${x.name}${x.desc?`<span class="meta" style="display:block;font-family:var(--f-body);font-weight:400">${x.desc}</span>`:""}</span>
+    <span class="price">${money(x.price)}${x.up?"<small>up</small>":""}</span></div>`;
+}
+function renderMenu(){
+  const h=[];
+  h.push(`<h2 class="sec">洗護方案</h2><p class="sec-note">每個方案擇一，皆含洗後保養與專業吹整。</p><div class="list">`);
+  for(const w of WASH){const on=sel.wash===w.id;
+    h.push(`<div class="card${on?" sel":""}"><div class="row"><span class="name">${w.name}</span><span class="price">${money(w.price)}</span></div>
+    ${incHTML(w.inc)}<button class="pick" data-wash="${w.id}">${on?"已選擇 ✓":"選這個方案"}</button></div>`);}
+  h.push(`</div><h2 class="sec">髮膜護髮</h2><p class="sec-note">依髮長計價，點選髮長即可加入。</p><div class="list">`);
+  for(const c of CARE){const s=sel.care[c.id];
+    h.push(`<div class="card${s?" sel":""}"><div class="row"><span class="name">${c.name}</span><span class="price">${money(c.prices[0])}<small>起</small></span></div>
+    ${incHTML(c.inc)}
+    <div class="chips">${LENGTHS.map((l,i)=>`<button class="chip" aria-pressed="${s&&s.len===i}" data-care="${c.id}" data-len="${i}">${l} ${money(c.prices[i])}</button>`).join("")}</div>
+    ${s?`<button class="pick" data-care-off="${c.id}">取消此項</button>`:""}</div>`);}
+  h.push(`</div><h2 class="sec">燙髮區</h2><div class="list">${PERM.map(x=>simpleCard(x,sel.perm)).join("")}</div>
+    <p class="fine">以上髮量過多需增加收費；特殊設計費另計。</p>`);
+  h.push(`<h2 class="sec">染髮區</h2><div class="list">${DYE.map(x=>simpleCard(x,sel.dye)).join("")}</div>
+    <p class="fine">以上染特殊顏色、髮量過多、特長需增加收費。</p>`);
+  h.push(`<h2 class="sec">加購區</h2><div class="list">${ADDON.map(x=>simpleCard(x,sel.addon)).join("")}</div>`);
+  const wk=SHOP.closedWeekdays.slice().sort().map(i=>"週"+WK[i]).join("、");
+  h.push(`<p class="hours">營業時間 ${SHOP.open}–${SHOP.close}（最後收客時間）${wk?`　·　${wk}公休`:""}　·　標示 up 的項目為起價，實際以現場評估為準</p>
+    <p class="hours"><button class="chip" data-go="admin">店家後台</button></p>`);
+  $("#v-menu").innerHTML=h.join("");
+}
+function setFor(id){return id[0]==="p"?sel.perm:id[0]==="d"?sel.dye:sel.addon}
+$("#v-menu").addEventListener("click",e=>{
+  const t=e.target.closest("button,[data-toggle]");if(!t)return;
+  if(t.dataset.wash){sel.wash=sel.wash===t.dataset.wash?null:t.dataset.wash}
+  else if(t.dataset.care){const id=t.dataset.care,len=+t.dataset.len;
+    sel.care[id]=sel.care[id]&&sel.care[id].len===len?undefined:{len,ext:sel.care[id]?.ext||new Set()};if(!sel.care[id])delete sel.care[id]}
+  else if(t.dataset.ext){const s=sel.care[t.dataset.ext];if(s){const i=+t.dataset.i;s.ext.has(i)?s.ext.delete(i):s.ext.add(i)}}
+  else if(t.dataset.careOff){delete sel.care[t.dataset.careOff]}
+  else if(t.dataset.toggle){const s=setFor(t.dataset.toggle);s.has(t.dataset.toggle)?s.delete(t.dataset.toggle):s.add(t.dataset.toggle)}
+  const y=window.scrollY;renderMenu();updateBar();window.scrollTo(0,y);
+});
+$("#v-menu").addEventListener("keydown",e=>{if((e.key===" "||e.key==="Enter")&&e.target.dataset.toggle){e.preventDefault();e.target.click()}});
+
+/* ===== 時段 ===== */
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const WK="日一二三四五六";
+function slotsOf(){const [oh,om]=SHOP.open.split(":").map(Number),[ch,cm]=SHOP.close.split(":").map(Number);
+  const out=[];for(let m=oh*60+om;m<=ch*60+cm;m+=SHOP.step)out.push(`${pad(m/60|0)}:${pad(m%60)}`);return out}
+const isActive=b=>b.status==="pending"||b.status==="confirmed"||b.status==="booked";
+function taken(date,time){return load().filter(b=>isActive(b)&&b.date===date&&b.time===time).length}
+/* 店家確認過的時段直接鎖住；尚未確認的預約先佔名額，最多 SHOP.capacity 位 */
+function slotBlocked(date,time){const l=load().filter(b=>isActive(b)&&b.date===date&&b.time===time);return l.some(b=>b.status==="confirmed")||l.length>=SHOP.capacity}
+function genCode(){const used=new Set(load().filter(x=>isActive(x)&&!isPast(x.date,x.time)).map(x=>x.code));
+  const free=[];for(let i=0;i<100;i++){const c=pad(i);if(!used.has(c))free.push(c)}
+  let code=free.length?free[Math.random()*free.length|0]:null;
+  for(let n=100;!code;n++)if(!used.has(String(n)))code=String(n); /* 兩位數用完時改用三位數 */
+  return code}
+function isPast(date,time){return new Date(`${date}T${time}:00`)<=new Date()}
+function dayHasSlot(date){return slotsOf().some(t=>!isPast(date,t)&&!slotBlocked(date,t))}
+
+function renderBook(){
+  const items=chosenItems();
+  if(lastBooking){renderTicket();return}
+  if(!items.length){$("#v-book").innerHTML=`<div class="empty"><p>請先到「價目表」選擇想預約的項目。</p><button class="btn" data-go="menu">前往價目表</button></div>`;return}
+  const days=[];const now=new Date();
+  for(let i=0;i<SHOP.days;i++){const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i);days.push(d)}
+  if(pickDate){const pd=new Date(pickDate+"T00:00:00");if(isClosed(pd,pickDate)){pickDate=null;pickTime=null}}
+  if(!pickDate){const first=days.find(d=>!isClosed(d,ymd(d))&&dayHasSlot(ymd(d)));pickDate=first?ymd(first):null}
+  const {sum,up}=totals(items);
+  $("#v-book").innerHTML=`
+  <h2 class="sec">選擇日期</h2>
+  <div class="dates">${days.map(d=>{const k=ymd(d),closed=isClosed(d,k),full=!closed&&!dayHasSlot(k);
+    return `<button class="date" data-date="${k}" aria-pressed="${pickDate===k}" ${closed||full?"disabled":""}>
+      <span class="w">${d.getMonth()+1}月</span><span class="d">${d.getDate()}</span><span class="w">${closed?"公休":full?"額滿":"週"+WK[d.getDay()]}</span></button>`}).join("")}</div>
+  <h2 class="sec">選擇時間</h2>
+  ${pickDate?`<div class="times">${slotsOf().map(t=>{const dis=isPast(pickDate,t)||slotBlocked(pickDate,t);
+    return `<button class="chip" data-time="${t}" aria-pressed="${pickTime===t}" ${dis?"disabled":""}>${t}</button>`}).join("")}</div>`:`<p class="sec-note">近期已無可預約時段。</p>`}
+  <h2 class="sec">聯絡資料</h2>
+  <form id="bk" novalidate>
+    <label class="f" for="f-name">姓名</label><input class="t" id="f-name" autocomplete="name" placeholder="王小美" required>
+    <label class="f" for="f-phone">手機號碼（查詢、取消預約時使用）</label><input class="t" id="f-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912345678" required>
+    <label class="f" for="f-note">備註（選填）</label><textarea class="t" id="f-note" placeholder="例：髮量較多、想染霧感奶茶色"></textarea>
+    ${F.pay?`<label class="f">付款方式（到店結帳時使用）</label>
+    <div class="chips" id="f-pay">${SHOP.pay.map((p,i)=>`<button type="button" class="chip" data-pay="${p}" aria-pressed="${(pickPay||SHOP.pay[0])===p}">${payName(p)}</button>`).join("")}</div>`:""}
+    ${F.member?`<label class="chk" for="f-join"><input type="checkbox" id="f-join" checked> 用這支手機同時加入會員（已是會員會自動辨識）</label>`:""}
+    <h2 class="sec">預約內容</h2>
+    <div class="card"><ul class="sum">${items.map(i=>`<li><span>${esc(i.name)}</span><span>${money(i.price)}${i.up?" up":""}</span></li>`).join("")}</ul>
+      <div class="total"><span>預估金額</span><span>${money(sum)}${up?" 起":""}</span></div></div>
+    <p class="err" id="f-err" hidden></p>
+    <div class="actions"><button class="btn" type="submit" id="f-submit">確認預約</button><button class="btn ghost" type="button" data-go="menu">修改項目</button></div>
+  </form>`;
+  const dd=$("#v-book .date[aria-pressed='true']");if(dd)dd.scrollIntoView({block:"nearest",inline:"center"});
+}
+$("#v-book").addEventListener("click",e=>{
+  const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.date){pickDate=t.dataset.date;pickTime=null;keepForm(renderBook)}
+  else if(t.dataset.time){pickTime=t.dataset.time;keepForm(renderBook)}
+  else if(t.dataset.pay){pickPay=t.dataset.pay;document.querySelectorAll("#f-pay .chip").forEach(c=>c.setAttribute("aria-pressed",c===t))}
+  else if(t.dataset.newbook!==undefined){lastBooking=null;resetSel();go("menu")}
+  else if(t.dataset.lookup!==undefined){const p=lastBooking.phone;lastBooking=null;resetSel();go("mine");$("#q").value=p;doLookup()}
+});
+function keepForm(fn){const v={n:$("#f-name")?.value,p:$("#f-phone")?.value,o:$("#f-note")?.value};fn();
+  if($("#f-name")){$("#f-name").value=v.n||"";$("#f-phone").value=v.p||"";$("#f-note").value=v.o||""}}
+$("#v-book").addEventListener("submit",async e=>{
+  e.preventDefault();const err=$("#f-err");
+  const name=$("#f-name").value.trim(),phone=$("#f-phone").value.replace(/\D/g,""),note=$("#f-note").value.trim();
+  const fail=m=>{err.textContent=m;err.hidden=false};
+  if(!pickDate||!pickTime)return fail("請選擇預約日期與時間。");
+  if(!name)return fail("請填寫姓名。");
+  if(!/^09\d{8}$/.test(phone))return fail("手機號碼請輸入 09 開頭的 10 位數字。");
+  if(isPast(pickDate,pickTime)||slotBlocked(pickDate,pickTime)){pickTime=null;keepForm(renderBook);return fail("這個時段剛剛被預約走了，請改選其他時間。")}
+  const items=chosenItems(),{sum,up}=totals(items);
+  const code=genCode();
+  const b={code,name,phone,note,date:pickDate,time:pickTime,items,total:sum,up,pay:F.pay?(SHOP.pay.includes(pickPay)?pickPay:SHOP.pay[0]):null,status:"pending",source:"online",createdAt:new Date().toISOString()};
+  const btn=$("#f-submit");btn.disabled=true;btn.textContent="送出中…";
+  try{await addBooking(b)}catch(er){console.warn(er);btn.disabled=false;btn.textContent="確認預約";return fail("網路不穩，預約沒有送出，請再按一次。")}
+  if(F.member&&$("#f-join")?.checked){try{if(!(await fetchMember(phone)))await joinMember(name,phone,"");setMe(phone)}catch(er){console.warn(er)}}
+  lastBooking=b;pickTime=null;renderBook();window.scrollTo(0,0);updateBar();
+});
+function fmtDate(k){const d=new Date(k+"T00:00:00");return `${d.getMonth()+1}月${d.getDate()}日（週${WK[d.getDay()]}）`}
+function renderTicket(){const b=lastBooking;
+  $("#v-book").innerHTML=`<div class="card ticket" style="margin-top:24px">
+    <p style="margin:0;color:var(--ok);font-weight:700">預約已送出</p><p class="meta" style="margin:0">店家確認後會保留這個時段</p>
+    <p class="meta">預約代碼</p><div class="code">${b.code}</div>
+    <p style="margin:0;font-family:var(--f-display);font-size:18px">${fmtDate(b.date)} ${b.time}</p>
+    <p class="meta">${esc(b.name)}・${b.phone}</p>
+    ${F.member&&getMember(b.phone)?`<p class="meta" style="color:var(--gold)">會員・目前 ${getMember(b.phone).points} 點，到店消費後由店家幫你集點</p>`:""}</div>
+    <div class="card" style="margin-top:12px"><ul class="sum">${b.items.map(i=>`<li><span>${esc(i.name)}</span><span>${money(i.price)}${i.up?" up":""}</span></li>`).join("")}</ul>
+    <div class="total"><span>預估金額</span><span>${money(b.total)}${b.up?" 起":""}</span></div></div>
+    ${F.pay&&b.pay?`<div class="card" style="margin-top:12px;text-align:center"><p style="margin:0">付款方式：<b>${payName(b.pay)}</b></p>
+      ${SHOP.qr[b.pay]?`<img class="qr" src="${SHOP.qr[b.pay]}" alt="${payName(b.pay)} 收款碼"><p class="meta">到店結帳時打開這個畫面掃碼付款，金額以現場為準。</p>`:`<p class="meta">到店結帳時付款，金額以現場為準。</p>`}</div>`:""}
+    <p class="fine">如需更改或取消，請到「查詢／取消」輸入手機號碼或預約代碼。</p>
+    <div class="actions"><button class="btn" data-lookup>查看我的預約</button><button class="btn ghost" data-newbook>再預約一筆</button></div>`;
+}
+function resetSel(){sel.wash=null;sel.care={};sel.perm.clear();sel.dye.clear();sel.addon.clear();pickDate=null;pickTime=null;renderMenu();updateBar()}
+
+/* ===== 查詢／取消 ===== */
+let pendingCancel=null;
+function renderMine(){
+  $("#v-mine").innerHTML=`<h2 class="sec">查詢預約</h2>
+  <form id="qf" novalidate><label class="f" for="q">手機號碼或預約代碼</label>
+  <div style="display:flex;gap:8px"><input class="t" id="q" placeholder="${CLOUD?"0912345678":"0912345678 或 2 位數代碼"}" style="flex:1;min-width:0"><button class="btn" type="submit">查詢</button></div></form>
+  <div id="res" class="list" style="margin-top:16px"><p class="empty">輸入預約時留下的手機號碼，或預約完成畫面上的兩位數預約代碼。</p></div>`;
+}
+async function doLookup(){
+  const raw=$("#q").value.trim();if(!raw)return;
+  const ph=raw.replace(/\D/g,"");let found;
+  if(CLOUD){
+    if(!/^09\d{8}$/.test(ph)){$("#res").innerHTML=`<p class="empty">請輸入預約時留下的 10 位數手機號碼。</p>`;return}
+    $("#res").innerHTML=`<p class="empty">查詢中…</p>`;
+    try{const d=await fdb.collection("lookup").doc(await sha(ph)).get(),ids=d.exists?(d.data().ids||[]).slice(-30):[];
+      const docs=await Promise.all(ids.map(id=>fdb.collection("bookings").doc(id).get()));
+      found=docs.filter(x=>x.exists).map(x=>({id:x.id,...x.data()})).filter(b=>b.phone===ph).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))}
+    catch(er){console.warn(er);$("#res").innerHTML=`<p class="empty">網路不穩，查詢失敗，請再試一次。</p>`;return}
+  }else found=load().filter(b=>(raw.length<=3&&b.code===raw&&isActive(b)&&!isPast(b.date,b.time))||(ph.length>=8&&b.phone===ph)).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  lastFound=found;const res=$("#res");
+  if(!found.length){res.innerHTML=`<p class="empty">找不到符合的預約，請確認號碼或代碼是否正確。</p>`;return}
+  res.innerHTML=found.map(b=>{const past=isPast(b.date,b.time);
+    const st=b.status==="cancelled"?`<span class="status off">已取消</span>`:past?`<span class="status off">已過期</span>`:b.status==="confirmed"?`<span class="status on">店家已確認</span>`:`<span class="status past">待店家確認</span>`;
+    return `<div class="card"><div class="row"><span class="name">${fmtDate(b.date)} ${b.time}</span>${st}</div>
+    <p class="meta">代碼 ${b.code}・${esc(b.name)}</p>
+    <p class="meta">${b.items.map(i=>esc(i.name)).join("、")}</p>
+    <p class="meta">預估 ${money(b.total)}${b.up?" 起":""}${F.pay&&b.pay?`・${payName(b.pay)}`:""}${b.note?`・備註：${esc(b.note)}`:""}</p>
+    ${isActive(b)&&!past?(pendingCancel===b.code
+      ?`<div class="confirm">確定要取消這筆預約嗎？取消後時段會釋出給其他客人。<div class="actions"><button class="btn danger" data-cancel-yes="${b.code}" data-d="${b.date}" data-t="${b.time}">確定取消</button><button class="btn ghost" data-cancel-no>保留預約</button></div></div>`
+      :`<div class="actions"><button class="btn ghost" data-cancel="${b.code}">取消預約</button></div>`):""}
+    </div>`}).join("");
+}
+$("#v-mine").addEventListener("submit",e=>{e.preventDefault();pendingCancel=null;doLookup()});
+$("#v-mine").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.cancel){pendingCancel=t.dataset.cancel;doLookup()}
+  else if(t.dataset.cancelNo!==undefined){pendingCancel=null;doLookup()}
+  else if(t.dataset.cancelYes){const b=lastFound.find(x=>x.code===t.dataset.cancelYes&&x.date===t.dataset.d&&x.time===t.dataset.t&&isActive(x));
+    t.disabled=true;(b?changeStatus(b,"cancelled"):Promise.resolve()).catch(er=>console.warn(er)).finally(()=>{pendingCancel=null;doLookup()})}
+});
+
+/* ===== 會員集點 ===== */
+const MKEY="salon-members-v1",MEKEY="salon-me";let memMembers={};
+function loadM(){if(CLOUD)return CACHE_M;try{const s=localStorage.getItem(MKEY);return s?JSON.parse(s):memMembers}catch(e){return memMembers}}
+function saveM(m){memMembers=m;try{localStorage.setItem(MKEY,JSON.stringify(m))}catch(e){}}
+const getMember=p=>loadM()[p]||null;
+async function fetchMember(p){if(!CLOUD||!p)return getMember(p);
+  const d=await fdb.collection("members").doc(await sha(p)).get();if(d.exists)CACHE_M[p]=d.data();else delete CACHE_M[p];return getMember(p)}
+async function joinMember(name,phone,birthday){const m=loadM();if(m[phone])return m[phone];
+  const x={name,phone,birthday,joinedAt:new Date().toISOString(),points:0,history:[]};m[phone]=x;
+  if(CLOUD)await fdb.collection("members").doc(await sha(phone)).set(x);else saveM(m);return x}
+async function addHistory(phone,type,n,note){const m=loadM(),x=m[phone];if(!x)return;x.points+=n;x.history.unshift({t:new Date().toISOString(),type,n,note});
+  if(CLOUD)await fdb.collection("members").doc(await sha(phone)).set(x);else saveM(m)}
+let mePhone=null;try{mePhone=localStorage.getItem(MEKEY)}catch(e){}
+function setMe(p){mePhone=p;try{p?localStorage.setItem(MEKEY,p):localStorage.removeItem(MEKEY)}catch(e){}}
+function allItems(){return [...WASH.map(w=>({id:w.id,name:w.name,price:w.price})),...CARE.map(c=>({id:c.id,name:c.name+"（短髮）",price:c.prices[0]})),...PERM,...DYE,...ADDON]}
+const rewardItem=()=>allItems().find(i=>i.id===SHOP.reward)||allItems()[0];
+const fmtT=iso=>{const d=new Date(iso);return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`};
+function stampCard(x,dark){const g=SHOP.goal,on=Math.min(x.points,g),times=Math.floor(x.points/g);
+  return `<div class="${dark?"mcard":"card"}"><div class="row"><span class="name">${esc(x.name)}</span><span class="price">${x.points} 點</span></div>
+  <p class="meta">${x.phone}・${fmtT(x.joinedAt)} 入會</p>
+  <div class="stamps">${Array.from({length:g},(_,i)=>`<span class="stamp${i<on?" on":""}${i===g-1?" gift":""}">${i<on?"✓":i===g-1?"贈":i+1}</span>`).join("")}</div>
+  <p class="meta">${times?`已集滿，可兌換 ${times} 次：${esc(rewardItem().name)}`:`再 ${g-on} 點就能兌換：${esc(rewardItem().name)}`}</p></div>`}
+function historyHTML(x){return x.history.length?`<div class="card"><ul class="sum">${x.history.slice(0,20).map(h=>`<li><span>${fmtT(h.t)}　${esc(h.note)}</span><span style="color:${h.n>0?"var(--ok)":"var(--danger)"}">${h.n>0?"+":""}${h.n}</span></li>`).join("")}</ul></div>`:`<p class="sec-note">還沒有集點紀錄。</p>`}
+function renderMember(msg){
+  const x=mePhone&&getMember(mePhone);
+  if(x){$("#v-member").innerHTML=`<h2 class="sec">我的集點卡</h2>${stampCard(x,true)}
+    <p class="fine">每次到店消費集 1 點，集滿 ${SHOP.goal} 點贈送「${esc(rewardItem().name)}」一次。點數由店家在結帳時幫你蓋上。</p>
+    <h2 class="sec">集點紀錄</h2>${historyHTML(x)}
+    <div class="actions"><button class="btn ghost" data-logout>換一個號碼</button></div>`;return}
+  $("#v-member").innerHTML=`<h2 class="sec">加入會員</h2>
+  <p class="sec-note">免費入會。每次到店消費集 1 點，集滿 ${SHOP.goal} 點贈送「${esc(rewardItem().name)}」。</p>
+  <div class="stamps" aria-hidden="true">${Array.from({length:SHOP.goal},(_,i)=>`<span class="stamp${i===SHOP.goal-1?" gift":""}">${i===SHOP.goal-1?"贈":i+1}</span>`).join("")}</div>
+  <form id="jf" novalidate>
+    <label class="f" for="j-name">姓名</label><input class="t" id="j-name" autocomplete="name" placeholder="王小美">
+    <label class="f" for="j-phone">手機號碼</label><input class="t" id="j-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912345678">
+    <label class="f" for="j-bd">生日（選填）</label><input class="t" id="j-bd" type="date">
+    <p class="err" id="j-err" ${msg?"":"hidden"}>${msg||""}</p>
+    <div class="actions"><button class="btn" type="submit">加入會員</button></div>
+  </form>
+  <h2 class="sec">已經是會員</h2>
+  <form id="lf" novalidate><label class="f" for="l-phone">輸入手機號碼查看點數</label>
+  <div style="display:flex;gap:8px"><input class="t" id="l-phone" type="tel" inputmode="numeric" placeholder="0912345678" style="flex:1;min-width:0"><button class="btn" type="submit">查看</button></div></form>
+  <p class="err" id="l-err" hidden></p>`;
+}
+$("#v-member").addEventListener("submit",async e=>{e.preventDefault();
+  if(e.target.id==="jf"){const name=$("#j-name").value.trim(),phone=$("#j-phone").value.replace(/\D/g,""),bd=$("#j-bd").value,err=$("#j-err");
+    const fail=m=>{err.textContent=m;err.hidden=false};
+    if(!name)return fail("請填寫姓名。");
+    if(!/^09\d{8}$/.test(phone))return fail("手機號碼請輸入 09 開頭的 10 位數字。");
+    try{if(await fetchMember(phone)){setMe(phone);return renderMember()}
+      await joinMember(name,phone,bd)}catch(er){console.warn(er);return fail("網路不穩，請再試一次。")}
+    setMe(phone);renderMember()}
+  else{const phone=$("#l-phone").value.replace(/\D/g,""),err=$("#l-err");
+    let x=null;try{x=await fetchMember(phone)}catch(er){console.warn(er)}
+    if(x){setMe(phone);renderMember()}else{err.textContent="查不到這支號碼的會員，可以在上方直接加入。";err.hidden=false}}
+});
+$("#v-member").addEventListener("click",e=>{if(e.target.closest("[data-logout]")){setMe(null);renderMember()}});
+
+/* ===== 店家設定：公休日 ===== */
+let adminLoginErr="";
+function renderAdmin(){
+  if(CLOUD&&!isAdmin){$("#v-admin").innerHTML=`<h2 class="sec">店家登入</h2><p class="sec-note">請用 Firebase 裡建立的店家帳號登入。</p>
+    <form id="lg" novalidate><label class="f" for="lg-email">Email</label><input class="t" id="lg-email" type="email" autocomplete="username">
+    <label class="f" for="lg-pw">密碼</label><input class="t" id="lg-pw" type="password" autocomplete="current-password">
+    ${adminLoginErr?`<p class="err">${adminLoginErr}</p>`:""}<div class="actions"><button class="btn" type="submit">登入</button><button class="btn ghost" type="button" data-go="menu">回價目表</button></div></form>`;return}
+  const dates=SHOP.closedDates.slice().sort();
+  const booked=d=>load().filter(b=>isActive(b)&&b.date===d).length;
+  const ax=adminPhone&&getMember(adminPhone);
+  const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],...(F.member?[["member","會員集點"]]:[]),["set","店家設定"]];
+  const sub=`<div class="subtabs">${tabs.map(([k,n])=>`<button class="chip" data-atab="${k}" aria-pressed="${adminTab===k}">${n}</button>`).join("")}${CLOUD?`<button class="chip" data-signout>登出</button>`:""}</div>`;
+  let body;
+  if(adminTab==="cal")body=calHTML();
+  else if(adminTab==="phone")body=phoneHTML();
+  else if(adminTab==="member")body=`${F.member?`<h2 class="sec">會員集點</h2><p class="sec-note">客人結帳時輸入手機號碼，幫他蓋點或兌換贈品。</p>
+  <form id="af" novalidate><div style="display:flex;gap:8px"><input class="t" id="a-phone" type="tel" inputmode="numeric" placeholder="會員手機號碼" value="${adminPhone||""}" style="flex:1;min-width:0"><button class="btn" type="submit">查詢</button></div></form>
+  ${adminPhone&&!ax?`<p class="err">查不到這支號碼的會員。</p>`:""}
+  ${ax?`<div style="margin-top:12px">${stampCard(ax,false)}</div>
+    <div class="actions"><button class="btn" data-stamp>＋1 點（本次消費）</button>
+    <button class="btn ghost" data-redeem ${ax.points<SHOP.goal?"disabled":""}>兌換贈品（−${SHOP.goal} 點）</button></div>
+    ${adminRedeem?`<div class="confirm">確定幫 ${esc(ax.name)} 兌換「${esc(rewardItem().name)}」嗎？會扣除 ${SHOP.goal} 點。<div class="actions"><button class="btn danger" data-redeem-yes>確定兌換</button><button class="btn ghost" data-redeem-no>先不要</button></div></div>`:""}
+    ${adminFlash?`<p class="meta" style="color:var(--ok)">${adminFlash}</p>`:""}
+    <h2 class="sec" style="font-size:17px">紀錄</h2>${historyHTML(ax)}`:""}
+  <h2 class="sec">集點規則</h2>
+  <label class="f" for="a-goal">集滿幾點可兌換</label><input class="t" id="a-goal" type="number" min="1" max="30" value="${SHOP.goal}">
+  <label class="f" for="a-reward">兌換贈送的項目</label><select class="t" id="a-reward">${allItems().map(i=>`<option value="${i.id}" ${i.id===SHOP.reward?"selected":""}>${esc(i.name)}（${money(i.price)}）</option>`).join("")}</select>`:""}`;
+  else body=`  ${F.pay?`<h2 class="sec">付款方式</h2><p class="sec-note">勾選店裡收的付款方式。可上傳 LINE Pay、台灣Pay 等 App 裡的「收款碼」截圖，客人預約完成後就看得到。</p>
+  <div class="card">${PAYS.map(([id,n])=>`<div class="payrow"><button class="chip" data-paytoggle="${id}" aria-pressed="${SHOP.pay.includes(id)}">${SHOP.pay.includes(id)?"✓ ":""}${n}</button><span class="lbl"></span>
+    ${id!=="cash"&&SHOP.pay.includes(id)?`${SHOP.qr[id]?`<img src="${SHOP.qr[id]}" alt="${n} 收款碼"><button class="chip" data-qrdel="${id}">移除收款碼</button>`:""}
+    <label class="upl" for="qr-${id}">${SHOP.qr[id]?"更換":"上傳收款碼"}<input type="file" accept="image/*" id="qr-${id}" data-qrup="${id}"></label>`:""}</div>`).join("")}</div>
+  <p class="err" id="pay-err" hidden></p>`:""}
+  <h2 class="sec">每週固定公休</h2><p class="sec-note">點選要休息的星期，可複選。</p>
+  <div class="chips">${[1,2,3,4,5,6,0].map(i=>`<button class="chip" data-wd="${i}" aria-pressed="${SHOP.closedWeekdays.includes(i)}">週${WK[i]}</button>`).join("")}</div>
+  <h2 class="sec">指定休假日</h2><p class="sec-note">國定假日、店休、員工旅遊等單日休息。</p>
+  <form id="cd" novalidate><div style="display:flex;gap:8px"><input class="t" type="date" id="cd-date" min="${ymd(new Date())}" style="flex:1;min-width:0"><button class="btn" type="submit">加入</button></div></form>
+  <p class="err" id="cd-err" hidden></p>
+  <div class="list" style="margin-top:12px">${dates.length?dates.map(d=>`<div class="card"><div class="row"><span class="name" style="font-size:16px">${fmtDate(d)}</span><button class="chip" data-rmdate="${d}">移除</button></div>
+    ${booked(d)?`<p class="err">這天已有 ${booked(d)} 筆預約，請記得聯絡客人改期。</p>`:""}</div>`).join(""):`<p class="sec-note">目前沒有指定休假日。</p>`}</div>
+  <p class="fine">設定後，客人在「預約時間」頁看到該日期會顯示「公休」，無法預約。</p>
+  <div class="actions"><button class="btn ghost" data-go="menu">回價目表</button></div>`;
+  $("#v-admin").innerHTML=sub+body;
+}
+let adminPhone=null,adminRedeem=false,adminFlash="";
+let adminTab="cal",calMonth=0,calDay=ymd(new Date()),adminAct=null,phoneMsg="",phoneErr="";
+const ST={pending:["待確認","past"],booked:["待確認","past"],confirmed:["已確認","on"],cancelled:["已取消","off"]};
+function calHTML(){
+  const now=new Date(),base=new Date(now.getFullYear(),now.getMonth()+calMonth,1),y=base.getFullYear(),m=base.getMonth();
+  const first=base.getDay(),dim=new Date(y,m+1,0).getDate(),all=load(),today=ymd(now);
+  const cnt={};all.filter(isActive).forEach(b=>{(cnt[b.date]=cnt[b.date]||{p:0,c:0})[b.status==="confirmed"?"c":"p"]++});
+  const cells=[];for(let i=0;i<first;i++)cells.push(`<span></span>`);
+  for(let d=1;d<=dim;d++){const dt=new Date(y,m,d),k=ymd(dt),c=cnt[k],cl=isClosed(dt,k);
+    cells.push(`<button class="cday${k===calDay?" sel":""}${k===today?" today":""}${cl?" closed":""}" data-cday="${k}"><span class="n">${d}</span>
+      ${cl?`<span class="tag-s">休</span>`:c?`<span class="dots">${c.c?`<i class="dc">${c.c}</i>`:""}${c.p?`<i class="dp">${c.p}</i>`:""}</span>`:""}</button>`)}
+  const day=all.filter(b=>b.date===calDay).sort((a,b)=>a.time.localeCompare(b.time)||(a.status==="cancelled")-(b.status==="cancelled"));
+  const pend=all.filter(b=>(b.status==="pending"||b.status==="booked")&&!isPast(b.date,b.time)).length;
+  const dd=new Date(calDay+"T00:00:00");
+  return `${pend?`<p class="notice">有 ${pend} 筆線上預約等待確認</p>`:""}
+  <div class="row" style="margin-top:16px"><button class="chip" data-cmon="-1" aria-label="上個月">‹</button><span class="name">${y} 年 ${m+1} 月</span><button class="chip" data-cmon="1" aria-label="下個月">›</button></div>
+  <div class="cal">${[..."日一二三四五六"].map(w=>`<span class="cw">${w}</span>`).join("")}${cells.join("")}</div>
+  <p class="legend">數字是當天預約筆數：<i class="dc">2</i> 已確認　<i class="dp">1</i> 待確認</p>
+  <h2 class="sec">${fmtDate(calDay)}${isClosed(dd,calDay)?"・公休":""}</h2>
+  <div class="list">${day.length?day.map(b=>{const [sl,sc]=ST[b.status]||ST.pending,act=isActive(b)&&!isPast(b.date,b.time);
+    return `<div class="card bk ${b.status==="cancelled"?"dim":""}"><div class="row"><span class="name">${b.time}　${esc(b.name)}</span><span class="status ${sc}">${sl}</span></div>
+    <p class="meta">${b.phone}・${b.source==="phone"?"電話預約":"線上預約"}・代碼 ${b.code}</p>
+    <p class="meta">${b.items.map(i=>esc(i.name)).join("、")||"未指定項目"}${b.note?`・${esc(b.note)}`:""}</p>
+    ${act?(adminAct&&adminAct.code===b.code?`<div class="confirm">${adminAct.type==="decline"?"確定婉拒這筆預約？":"確定取消這筆預約？"}時段會重新開放。<div class="actions"><button class="btn danger" data-ayes="${b.code}">確定</button><button class="btn ghost" data-ano>先不要</button></div></div>`
+      :`<div class="actions">${b.status!=="confirmed"?`<button class="btn" data-aconfirm="${b.code}">確認預約</button><button class="btn ghost" data-adecline="${b.code}">婉拒</button>`:`<button class="btn ghost" data-acancel="${b.code}">取消預約</button>`}</div>`):""}
+    </div>`}).join(""):`<p class="sec-note">這天還沒有預約。</p>`}</div>
+  <div class="actions"><button class="btn" data-atab="phone">在這天新增電話預約</button></div>`;
+}
+function phoneHTML(){
+  const items=allItems();
+  return `<h2 class="sec">新增電話預約</h2><p class="sec-note">客人打電話來時由店家登記，登記後直接算「已確認」，時段會鎖住。</p>
+  <form id="pf" novalidate>
+    <label class="f" for="p-name">客人姓名</label><input class="t" id="p-name" placeholder="王小美">
+    <label class="f" for="p-phone">手機號碼</label><input class="t" id="p-phone" type="tel" inputmode="numeric" placeholder="0912345678">
+    <label class="f" for="p-date">日期</label><input class="t" id="p-date" type="date" min="${ymd(new Date())}" value="${calDay>=ymd(new Date())?calDay:ymd(new Date())}">
+    <label class="f" for="p-time">時間</label><select class="t" id="p-time">${slotsOf().map(t=>`<option>${t}</option>`).join("")}</select>
+    <label class="f" for="p-item">服務項目</label><select class="t" id="p-item"><option value="">未指定（到店再決定）</option>${items.map(i=>`<option value="${i.id}">${esc(i.name)}（${money(i.price)}${i.up?" 起":""}）</option>`).join("")}</select>
+    <label class="f" for="p-note">備註（選填）</label><textarea class="t" id="p-note" placeholder="例：髮長及腰、要加購肩頸按摩"></textarea>
+    ${phoneErr?`<p class="err">${phoneErr}</p>`:""}${phoneMsg?`<p class="meta" style="color:var(--ok)">${phoneMsg}</p>`:""}
+    <div class="actions"><button class="btn" type="submit">登記預約</button></div>
+  </form>`;
+}
+function setStatus(code,st){const b=load().find(x=>x.code===code&&isActive(x));if(b)changeStatus(b,st).then(()=>{if(!CLOUD)renderAdmin()}).catch(er=>{console.warn(er);adminFlash="更新失敗，請檢查網路。";renderAdmin()})}
+$("#v-admin").addEventListener("change",e=>{
+  if(e.target.id==="a-goal"){const n=Math.max(1,Math.min(30,parseInt(e.target.value)||10));SHOP.goal=n;saveSettings();renderAdmin();renderMember()}
+  if(e.target.id==="a-reward"){SHOP.reward=e.target.value;saveSettings();renderMember()}
+  if(e.target.dataset.qrup){const id=e.target.dataset.qrup,file=e.target.files[0];if(!file)return;
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{const k=Math.min(1,480/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=img.width*k;c.height=img.height*k;
+      {const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height)}SHOP.qr[id]=c.toDataURL("image/jpeg",.85);URL.revokeObjectURL(url);saveSettings();renderAdmin()};
+    img.onerror=()=>{const er=$("#pay-err");er.textContent="這個檔案讀不出來，請換一張收款碼截圖。";er.hidden=false};img.src=url}
+});
+$("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;
+  const re=()=>{const y=window.scrollY;renderAdmin();window.scrollTo(0,y)};
+  if(t.dataset.signout!==undefined){fauth.signOut();return}
+  if(t.dataset.atab){adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
+  if(t.dataset.cmon){calMonth+=+t.dataset.cmon;re();return}
+  if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
+  if(t.dataset.aconfirm){setStatus(t.dataset.aconfirm,"confirmed");re();return}
+  if(t.dataset.adecline){adminAct={code:t.dataset.adecline,type:"decline"};re();return}
+  if(t.dataset.acancel){adminAct={code:t.dataset.acancel,type:"cancel"};re();return}
+  if(t.dataset.ano!==undefined){adminAct=null;re();return}
+  if(t.dataset.ayes){setStatus(t.dataset.ayes,"cancelled");adminAct=null;re();return}
+  if(t.dataset.paytoggle){const id=t.dataset.paytoggle,a=SHOP.pay;
+    if(a.includes(id)){if(a.length===1){const er=$("#pay-err");er.textContent="至少要保留一種付款方式。";er.hidden=false;return}a.splice(a.indexOf(id),1)}else a.push(id);
+    SHOP.pay=PAYS.map(p=>p[0]).filter(x=>a.includes(x));saveSettings();renderAdmin();return}
+  if(t.dataset.qrdel){delete SHOP.qr[t.dataset.qrdel];saveSettings();renderAdmin();return}
+  if(t.dataset.stamp!==undefined){addHistory(adminPhone,"stamp",1,"到店消費");adminFlash="已幫客人加 1 點。";adminRedeem=false;renderAdmin();renderMember();return}
+  if(t.dataset.redeem!==undefined){adminRedeem=true;adminFlash="";renderAdmin();return}
+  if(t.dataset.redeemNo!==undefined){adminRedeem=false;renderAdmin();return}
+  if(t.dataset.redeemYes!==undefined){addHistory(adminPhone,"redeem",-SHOP.goal,"兌換 "+rewardItem().name);adminRedeem=false;adminFlash="兌換完成。";renderAdmin();renderMember();return}
+  if(t.dataset.wd){const i=+t.dataset.wd,a=SHOP.closedWeekdays;a.includes(i)?a.splice(a.indexOf(i),1):a.push(i);saveSettings();renderAdmin();renderMenu()}
+  else if(t.dataset.rmdate){SHOP.closedDates=SHOP.closedDates.filter(d=>d!==t.dataset.rmdate);saveSettings();renderAdmin()}
+});
+$("#v-admin").addEventListener("submit",async e=>{e.preventDefault();
+  if(e.target.id==="lg"){adminLoginErr="";try{await fauth.signInWithEmailAndPassword($("#lg-email").value.trim(),$("#lg-pw").value)}catch(er){adminLoginErr="Email 或密碼不正確。";renderAdmin()}return}
+  if(e.target.id==="pf"){phoneMsg=phoneErr="";
+    const name=$("#p-name").value.trim(),phone=$("#p-phone").value.replace(/\D/g,""),date=$("#p-date").value,time=$("#p-time").value,note=$("#p-note").value.trim();
+    const it=allItems().find(i=>i.id===$("#p-item").value);
+    const keep=()=>{const v={n:name,p:$("#p-phone").value,d:date,t:time,i:$("#p-item").value,o:note};renderAdmin();$("#p-name").value=v.n;$("#p-phone").value=v.p;$("#p-date").value=v.d;$("#p-time").value=v.t;$("#p-item").value=v.i;$("#p-note").value=v.o};
+    if(!name){phoneErr="請填寫客人姓名。";return keep()}
+    if(!/^09\d{8}$/.test(phone)){phoneErr="手機號碼請輸入 09 開頭的 10 位數字。";return keep()}
+    if(!date){phoneErr="請選擇日期。";return keep()}
+    if(isPast(date,time)){phoneErr="這個時間已經過了。";return keep()}
+    if(isClosed(new Date(date+"T00:00:00"),date)){phoneErr="這天是公休日，要先到店家設定取消公休。";return keep()}
+    if(load().some(b=>b.status==="confirmed"&&b.date===date&&b.time===time)){phoneErr="這個時段已經有確認的預約了，請換一個時間。";return keep()}
+    const items=it?[{name:it.name,price:it.price,up:!!it.up}]:[];
+    const b={code:genCode(),name,phone,note,date,time,items,total:it?it.price:0,up:!!(it&&it.up),pay:null,status:"confirmed",source:"phone",createdAt:new Date().toISOString(),confirmedAt:new Date().toISOString()};
+    const l=load();try{await addBooking(b)}catch(er){console.warn(er);phoneErr="網路不穩，沒有登記成功，請再試一次。";return keep()}calDay=date;
+    const others=l.filter(x=>x!==b&&(x.status==="pending"||x.status==="booked")&&x.date===date&&x.time===time).length;
+    phoneMsg=`已登記 ${fmtDate(date)} ${time} ${name}，預約代碼 ${b.code}。${others?`同時段還有 ${others} 筆線上預約待確認，記得到行事曆處理。`:""}`;
+    renderAdmin();return}
+  if(e.target.id==="af"){adminPhone=$("#a-phone").value.replace(/\D/g,"")||null;adminRedeem=false;adminFlash="";try{await fetchMember(adminPhone)}catch(er){console.warn(er)}renderAdmin();return}
+  const v=$("#cd-date").value,err=$("#cd-err");
+  if(!v){err.textContent="請先選擇日期。";err.hidden=false;return}
+  if(!SHOP.closedDates.includes(v))SHOP.closedDates.push(v);saveSettings();renderAdmin()});
+
+/* ===== 分頁與底部列 ===== */
+function go(v){view=v;
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===v));
+  for(const k of ["menu","book","mine","member","admin"])$("#v-"+k).hidden=k!==v;
+  if(v==="book")renderBook();
+  if(v==="admin")renderAdmin();
+  if(v==="member"){renderMember();if(CLOUD&&mePhone&&!getMember(mePhone))fetchMember(mePhone).then(()=>renderMember()).catch(er=>console.warn(er))}
+  if(v==="mine"&&!$("#q"))renderMine();
+  updateBar();window.scrollTo(0,0);
+}
+document.querySelector("nav.tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(b)go(b.dataset.view)});
+document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g)go(g.dataset.go)});
+function updateBar(){
+  const items=chosenItems(),{sum,up}=totals(items);
+  $("#bar").hidden=view!=="menu";
+  $("#bar-count").textContent=items.length?`已選 ${items.length} 項・預估金額`:"尚未選擇項目";
+  $("#bar-total").textContent=money(sum)+(up?" 起":"");
+  $("#bar-next").disabled=!items.length;
+}
+$("#bar-next").addEventListener("click",()=>{lastBooking=null;go("book")});
+
+/* 範例：預設選好一個方案，讓第一次打開就看得到底部金額列 */
+sel.wash="w1200";
+if(!F.member)$("#tab-member").hidden=true;
+renderMenu();renderMine();renderMember();updateBar();startCloud();
+</script>
