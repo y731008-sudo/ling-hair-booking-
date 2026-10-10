@@ -168,7 +168,7 @@ const CLOUD = !!(FIREBASE_CONFIG && window.firebase);
 let fdb=null,fauth=null,isAdmin=false,CACHE=[],CACHE_M={},lastFound=[];
 if(CLOUD){firebase.initializeApp(FIREBASE_CONFIG);fdb=firebase.firestore();fauth=firebase.auth()}
 async function sha(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("ling|"+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
-const SHOP = { open:"13:00", close:"22:00" /* 最後收客時間 */, step:30, capacity:2, days:21, closedWeekdays:[] /* 例：[1] = 週一公休 */, closedDates:[] /* 例：["2026-10-10"] */,
+const SHOP = { open:"13:00", close:"22:00" /* 最後收客時間 */, step:30, capacity:1, days:21, closedWeekdays:[] /* 例：[1] = 週一公休 */, closedDates:[] /* 例：["2026-10-10"] */,
   goal:10 /* 集滿幾點可兌換 */, reward:"w500" /* 兌換贈送的項目 */,
   pay:["cash","linepay","twpay"] /* 店家接受的付款方式 */, qr:{} /* 各付款方式的收款碼圖片 */ };
 const PAYS=[["cash","現金"],["linepay","LINE Pay"],["twpay","台灣Pay"],["jkopay","街口支付"],["pxpay","全支付"],["easywallet","悠遊付"],["icashpay","icash Pay"],["card","信用卡"],["transfer","銀行轉帳"]];
@@ -315,7 +315,7 @@ function slotsOf(){const [oh,om]=SHOP.open.split(":").map(Number),[ch,cm]=SHOP.c
   const out=[];for(let m=oh*60+om;m<=ch*60+cm;m+=SHOP.step)out.push(`${pad(m/60|0)}:${pad(m%60)}`);return out}
 const isActive=b=>b.status==="pending"||b.status==="confirmed"||b.status==="booked";
 function taken(date,time){return load().filter(b=>isActive(b)&&b.date===date&&b.time===time).length}
-/* 店家確認過的時段直接鎖住；尚未確認的預約先佔名額，最多 SHOP.capacity 位 */
+/* 每個時段最多 SHOP.capacity 位客人，待確認的預約也算；店家確認過的時段一定鎖住 */
 function slotBlocked(date,time){const l=load().filter(b=>isActive(b)&&b.date===date&&b.time===time);return l.some(b=>b.status==="confirmed")||l.length>=SHOP.capacity}
 function genCode(){const used=new Set(load().filter(x=>isActive(x)&&!isPast(x.date,x.time)).map(x=>x.code));
   const free=[];for(let i=0;i<100;i++){const c=pad(i);if(!used.has(c))free.push(c)}
