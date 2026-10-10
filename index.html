@@ -162,6 +162,8 @@ select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
 const F = { member:true, pay:true };
 /* ===== 雲端資料庫：貼上 Firebase 的 firebaseConfig 就改用雲端；留空（null）則存在本機瀏覽器，僅供展示 ===== */
 const FIREBASE_CONFIG = {"apiKey": "AIzaSyBhYqJT8IZ04bpdePEJEJXHfZVFdnU3OfI", "authDomain": "ling-hair.firebaseapp.com", "projectId": "ling-hair", "storageBucket": "ling-hair.firebasestorage.app", "messagingSenderId": "683141416876", "appId": "1:683141416876:web:909be74fd4c191198b9c09"};
+/* ===== LINE 通知：貼上 Google Apps Script 網頁應用程式網址，有新預約或客人取消時通知店家；留空則不通知 ===== */
+const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbyeUShisfgkveslmH3ijC9NXuQqZw4hW2k7nc0pDPFiWNASILCCTTBHWpR06zhilkq2/exec";
 const CLOUD = !!(FIREBASE_CONFIG && window.firebase);
 let fdb=null,fauth=null,isAdmin=false,CACHE=[],CACHE_M={},lastFound=[];
 if(CLOUD){firebase.initializeApp(FIREBASE_CONFIG);fdb=firebase.firestore();fauth=firebase.auth()}
@@ -215,6 +217,9 @@ const KEY="salon-bookings-v1"; let memStore=[];
 function load(){if(CLOUD)return CACHE.slice();try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):memStore}catch(e){return memStore}}
 function save(list){memStore=list;try{localStorage.setItem(KEY,JSON.stringify(list))}catch(e){}}
 /* 雲端：bookings 存完整資料（只有店家能列出）；avail 只放日期、時間、狀態、代碼，給客人判斷空檔；lookup 用手機雜湊找回自己的預約 */
+function notify(type,b){if(!CLOUD||!NOTIFY_URL||!b.id)return;
+  const d=type==="new"?{type,id:b.id,name:b.name,phone:b.phone,items:(b.items||[]).map(i=>i.name),total:b.total,up:b.up,note:b.note}:{type,id:b.id,name:b.name};
+  try{fetch(NOTIFY_URL,{method:"POST",mode:"no-cors",keepalive:true,body:JSON.stringify(d)}).catch(()=>{})}catch(e){}}
 async function addBooking(b){
   if(!CLOUD){const l=load();l.push(b);save(l);return b}
   const ref=fdb.collection("bookings").doc();b.id=ref.id;const batch=fdb.batch();
@@ -376,6 +381,7 @@ $("#v-book").addEventListener("submit",async e=>{
   const b={code,name,phone,note,date:pickDate,time:pickTime,items,total:sum,up,pay:F.pay?(SHOP.pay.includes(pickPay)?pickPay:SHOP.pay[0]):null,status:"pending",source:"online",createdAt:new Date().toISOString()};
   const btn=$("#f-submit");btn.disabled=true;btn.textContent="送出中…";
   try{await addBooking(b)}catch(er){console.warn(er);btn.disabled=false;btn.textContent="確認預約";return fail("網路不穩，預約沒有送出，請再按一次。")}
+  notify("new",b);
   if(F.member&&$("#f-join")?.checked){try{if(!(await fetchMember(phone)))await joinMember(name,phone,"");setMe(phone)}catch(er){console.warn(er)}}
   lastBooking=b;pickTime=null;renderBook();window.scrollTo(0,0);updateBar();
 });
@@ -433,7 +439,7 @@ $("#v-mine").addEventListener("click",e=>{const t=e.target.closest("button");if(
   if(t.dataset.cancel){pendingCancel=t.dataset.cancel;doLookup()}
   else if(t.dataset.cancelNo!==undefined){pendingCancel=null;doLookup()}
   else if(t.dataset.cancelYes){const b=lastFound.find(x=>x.code===t.dataset.cancelYes&&x.date===t.dataset.d&&x.time===t.dataset.t&&isActive(x));
-    t.disabled=true;(b?changeStatus(b,"cancelled"):Promise.resolve()).catch(er=>console.warn(er)).finally(()=>{pendingCancel=null;doLookup()})}
+    t.disabled=true;(b?changeStatus(b,"cancelled").then(()=>notify("cancel",b)):Promise.resolve()).catch(er=>console.warn(er)).finally(()=>{pendingCancel=null;doLookup()})}
 });
 
 /* ===== 會員集點 ===== */
