@@ -4,7 +4,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() {
-      return request.auth != null && request.auth.token.email in ['yoyo20121117@gmail.com'];
+      return request.auth != null && request.auth.token.email in ['yoyo20121117@gmail.com', 'aa0925091887@gmail.com'];
     }
     function activeStatus(s) { return s in ['pending', 'confirmed']; }
 
