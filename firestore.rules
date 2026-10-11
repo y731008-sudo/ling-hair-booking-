@@ -1,12 +1,24 @@
 rules_version = '2';
 // 伶髮藝線上預約 Firestore 安全規則
-// 店家帳號：只有這個 Email 登入後能管理預約與設定
+// 店家帳號：店主 Email 寫在 isOwner()；其他管理員由店主在後台「店家設定」新增
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 店主：可以在後台新增或移除管理員
+    function isOwner() {
+      return request.auth != null && request.auth.token.email in ['yoyo20121117@gmail.com'];
+    }
+    // 管理員：店主，或是店主在後台加進 admins 名單的人
     function isAdmin() {
-      return request.auth != null && request.auth.token.email in ['yoyo20121117@gmail.com', 'aa0925091887@gmail.com'];
+      return isOwner() || (request.auth != null && request.auth.token.email is string
+        && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())));
     }
     function activeStatus(s) { return s in ['pending', 'confirmed']; }
+
+    // 管理員名單：文件編號是 Email（小寫）；管理員可讀，只有店主能新增或移除
+    match /admins/{email} {
+      allow read: if isAdmin();
+      allow write: if isOwner();
+    }
 
     // 店家設定（公休日、付款方式、集點規則）：大家可讀，只有店家能改
     match /config/{doc} {
