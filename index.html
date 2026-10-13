@@ -165,6 +165,8 @@ const FIREBASE_CONFIG = {"apiKey": "AIzaSyBhYqJT8IZ04bpdePEJEJXHfZVFdnU3OfI", "a
 /* ===== LINE 通知：貼上 Google Apps Script 網頁應用程式網址，有新預約或客人取消時通知店家；留空則不通知 ===== */
 /* ===== 店主 Email：只有店主能在後台新增或移除管理員（要和 firestore.rules 的 isOwner() 一致） ===== */
 const OWNER_EMAILS = ["yoyo20121117@gmail.com"];
+/* ===== LINE 官方帳號 ID（@ 開頭）：填了之後，預約完成畫面會有「用 LINE 接收預約明細」按鈕；留空則不顯示 ===== */
+const LINE_OA_ID = "";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbyeUShisfgkveslmH3ijC9NXuQqZw4hW2k7nc0pDPFiWNASILCCTTBHWpR06zhilkq2/exec";
 const CLOUD = !!(FIREBASE_CONFIG && window.firebase);
 let fdb=null,fauth=null,isAdmin=false,CACHE=[],CACHE_M={},lastFound=[];
@@ -399,6 +401,10 @@ function renderTicket(){const b=lastBooking;
     <div class="total"><span>預估金額</span><span>${money(b.total)}${b.up?" 起":""}</span></div></div>
     ${F.pay&&b.pay?`<div class="card" style="margin-top:12px;text-align:center"><p style="margin:0">付款方式：<b>${payName(b.pay)}</b></p>
       ${SHOP.qr[b.pay]?`<img class="qr" src="${SHOP.qr[b.pay]}" alt="${payName(b.pay)} 收款碼"><p class="meta">到店結帳時打開這個畫面掃碼付款，金額以現場為準。</p>`:`<p class="meta">到店結帳時付款，金額以現場為準。</p>`}</div>`:""}
+    ${LINE_OA_ID?`<div class="card" style="margin-top:12px;text-align:center"><p style="margin:0 0 8px">想在 LINE 收到這筆預約明細嗎？</p>
+      <a class="btn" style="display:block;text-decoration:none;background:#06C755;border-color:#06C755;color:#fff" target="_blank" rel="noopener"
+        href="https://line.me/R/oaMessage/${encodeURIComponent(LINE_OA_ID)}/?${encodeURIComponent(`預約確認 ${b.phone} 代碼${b.code}`)}">用 LINE 接收預約明細</a>
+      <p class="meta" style="margin:8px 0 0">會打開伶髮藝官方 LINE，按「傳送」後就會收到明細。</p></div>`:""}
     <p class="fine">如需更改或取消，請到「查詢／取消」輸入手機號碼或預約代碼。</p>
     <div class="actions"><button class="btn" data-lookup>查看我的預約</button><button class="btn ghost" data-newbook>再預約一筆</button></div>`;
 }
