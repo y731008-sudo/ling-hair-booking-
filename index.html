@@ -504,32 +504,37 @@ $("#v-member").addEventListener("click",e=>{if(e.target.closest("[data-logout]")
 
 /* ===== 店家設定：公休日 ===== */
 let adminLoginErr="";
-/* ===== 管理員帳號（只有店主看得到） ===== */
+/* ===== 管理員帳號（只有店主看得到）：員工用手機號碼＋密碼登入，系統內部換成 手機@STAFF_DOMAIN 的帳號 ===== */
+const STAFF_DOMAIN="staff.linghair.app";
+const staffEmail=ph=>ph+"@"+STAFF_DOMAIN;
+const loginId=v=>{const d=v.replace(/[\s-]/g,"");return /^09\d{8}$/.test(d)?staffEmail(d):v.trim().toLowerCase()};
+const fmtPhone=p=>p.replace(/^(\d{4})(\d{3})(\d{3})$/,"$1-$2-$3");
 let admins=null,admMsg="",admErr="",admRm=null,admBusy=false;
 function isOwner(){const u=CLOUD&&fauth.currentUser;return !!(u&&u.email&&OWNER_EMAILS.includes(u.email.toLowerCase()))}
-async function loadAdmins(){try{const q=await fdb.collection("admins").get();admins=q.docs.map(d=>({email:d.id,...d.data()})).sort((a,b)=>a.email.localeCompare(b.email))}catch(e){console.warn(e);admins=[];admErr="管理員名單讀取失敗，請確認安全規則已更新。"}}
+function admLabel(a){const ph=a.phone||(a.email.endsWith("@"+STAFF_DOMAIN)?a.email.split("@")[0]:"");return ph?`${a.name?esc(a.name)+"　":""}${fmtPhone(ph)}`:esc(a.email)}
+async function loadAdmins(){try{const q=await fdb.collection("admins").get();admins=q.docs.map(d=>({email:d.id,...d.data()})).sort((a,b)=>(a.addedAt||"").localeCompare(b.addedAt||""))}catch(e){console.warn(e);admins=[];admErr="管理員名單讀取失敗，請確認安全規則已更新。"}}
 function adminsHTML(){if(!isOwner())return "";
   if(admins===null){loadAdmins().then(()=>{if(view==="admin"&&adminTab==="set")renderAdmin()});return `<h2 class="sec">管理員帳號</h2><p class="sec-note">讀取中…</p>`}
-  return `<h2 class="sec">管理員帳號</h2><p class="sec-note">新增的人用自己的 Email 和密碼登入後台，可以管理預約、會員和設定。只有你能新增或移除管理員。</p>
+  return `<h2 class="sec">管理員帳號</h2><p class="sec-note">新增的人在店家登入頁輸入手機號碼和密碼就能登入後台，可以管理預約和設定。只有你能新增或移除管理員。</p>
   <div class="list"><div class="card"><div class="row"><span class="name" style="font-size:16px">${esc(fauth.currentUser.email)}</span><span class="status on">店主</span></div></div>
-  ${admins.map(a=>`<div class="card"><div class="row"><span class="name" style="font-size:16px;word-break:break-all">${esc(a.email)}</span><button class="chip" data-admrm="${esc(a.email)}">移除</button></div>
-    ${admRm===a.email?`<div class="confirm">確定移除 ${esc(a.email)} 嗎？移除後他就不能再登入後台。<div class="actions"><button class="btn danger" data-admrm-yes="${esc(a.email)}">確定移除</button><button class="btn ghost" data-admrm-no>先不要</button></div></div>`:""}</div>`).join("")}</div>
-  <form id="adm" novalidate style="margin-top:12px"><label class="f" for="adm-email">新管理員 Email</label><input class="t" id="adm-email" type="email" autocomplete="off">
+  ${admins.map(a=>`<div class="card"><div class="row"><span class="name" style="font-size:16px;word-break:break-all">${admLabel(a)}</span><button class="chip" data-admrm="${esc(a.email)}">移除</button></div>
+    ${admRm===a.email?`<div class="confirm">確定移除 ${admLabel(a)} 嗎？移除後就不能再登入後台。<div class="actions"><button class="btn danger" data-admrm-yes="${esc(a.email)}">確定移除</button><button class="btn ghost" data-admrm-no>先不要</button></div></div>`:""}</div>`).join("")}</div>
+  <form id="adm" novalidate style="margin-top:12px"><label class="f" for="adm-name">名字</label><input class="t" id="adm-name" type="text" autocomplete="off" placeholder="例：小美">
+  <label class="f" for="adm-phone">手機號碼（登入帳號）</label><input class="t" id="adm-phone" type="tel" inputmode="numeric" autocomplete="off" placeholder="09xxxxxxxx">
   <label class="f" for="adm-pw">登入密碼（至少 6 個字）</label><input class="t" id="adm-pw" type="text" autocomplete="new-password">
   ${admErr?`<p class="err">${admErr}</p>`:""}${admMsg?`<p class="meta" style="color:var(--ok)">${admMsg}</p>`:""}
-  <div class="actions"><button class="btn" type="submit" ${admBusy?"disabled":""}>${admBusy?"新增中…":"新增管理員"}</button></div></form>
-  <p class="fine">如果這個 Email 之前就有帳號，密碼不會改變，請他用原本的密碼登入。</p>`}
-async function addAdmin(email,pw){
+  <div class="actions"><button class="btn" type="submit" ${admBusy?"disabled":""}>${admBusy?"新增中…":"新增管理員"}</button></div></form>`}
+async function addAdmin(email,pw,data){
   const sec=firebase.apps.find(a=>a.name==="staff")||firebase.initializeApp(FIREBASE_CONFIG,"staff");let existed=false;
   try{await sec.auth().createUserWithEmailAndPassword(email,pw);await sec.auth().signOut()}
   catch(er){if(er.code==="auth/email-already-in-use")existed=true;
-    else throw new Error(er.code==="auth/invalid-email"?"Email 格式不正確。":er.code==="auth/weak-password"?"密碼太簡單，請至少 6 個字。":"帳號建立失敗，請稍後再試。")}
-  try{await fdb.collection("admins").doc(email).set({addedAt:new Date().toISOString(),addedBy:fauth.currentUser.email})}
+    else throw new Error(er.code==="auth/weak-password"?"密碼太簡單，請至少 6 個字。":"帳號建立失敗，請稍後再試。")}
+  try{await fdb.collection("admins").doc(email).set({...data,addedAt:new Date().toISOString(),addedBy:fauth.currentUser.email})}
   catch(er){console.warn(er);throw new Error("加入管理員名單失敗，請確認安全規則已更新。")}
   return existed}
 function renderAdmin(){
-  if(CLOUD&&!isAdmin){$("#v-admin").innerHTML=`<h2 class="sec">店家登入</h2><p class="sec-note">請用 Firebase 裡建立的店家帳號登入。</p>
-    <form id="lg" novalidate><label class="f" for="lg-email">Email</label><input class="t" id="lg-email" type="email" autocomplete="username">
+  if(CLOUD&&!isAdmin){$("#v-admin").innerHTML=`<h2 class="sec">店家登入</h2><p class="sec-note">員工請輸入手機號碼和密碼；店主可用 Email 登入。</p>
+    <form id="lg" novalidate><label class="f" for="lg-email">手機號碼或 Email</label><input class="t" id="lg-email" type="text" autocomplete="username">
     <label class="f" for="lg-pw">密碼</label><input class="t" id="lg-pw" type="password" autocomplete="current-password">
     ${adminLoginErr?`<p class="err">${adminLoginErr}</p>`:""}<div class="actions"><button class="btn" type="submit">登入</button><button class="btn ghost" type="button" data-go="menu">回價目表</button></div></form>`;return}
   const dates=SHOP.closedDates.slice().sort();
@@ -627,7 +632,7 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.admrm){admRm=t.dataset.admrm;admMsg=admErr="";re();return}
   if(t.dataset.admrmNo!==undefined){admRm=null;re();return}
   if(t.dataset.admrmYes){const em=t.dataset.admrmYes;t.disabled=true;
-    fdb.collection("admins").doc(em).delete().then(()=>{admins=admins.filter(a=>a.email!==em);admMsg=`已移除 ${em}。`}).catch(er=>{console.warn(er);admErr="移除失敗，請檢查網路。"}).finally(()=>{admRm=null;re()});return}
+    fdb.collection("admins").doc(em).delete().then(()=>{admins=admins.filter(a=>a.email!==em);admMsg="已移除。"}).catch(er=>{console.warn(er);admErr="移除失敗，請檢查網路。"}).finally(()=>{admRm=null;re()});return}
   if(t.dataset.atab){adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
   if(t.dataset.cmon){calMonth+=+t.dataset.cmon;re();return}
   if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
@@ -648,7 +653,7 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   else if(t.dataset.rmdate){SHOP.closedDates=SHOP.closedDates.filter(d=>d!==t.dataset.rmdate);saveSettings();renderAdmin()}
 });
 $("#v-admin").addEventListener("submit",async e=>{e.preventDefault();
-  if(e.target.id==="lg"){adminLoginErr="";try{await fauth.signInWithEmailAndPassword($("#lg-email").value.trim(),$("#lg-pw").value)}catch(er){adminLoginErr="Email 或密碼不正確。";renderAdmin()}return}
+  if(e.target.id==="lg"){adminLoginErr="";try{await fauth.signInWithEmailAndPassword(loginId($("#lg-email").value),$("#lg-pw").value)}catch(er){adminLoginErr="帳號或密碼不正確。";renderAdmin()}return}
   if(e.target.id==="pf"){phoneMsg=phoneErr="";
     const name=$("#p-name").value.trim(),phone=$("#p-phone").value.replace(/\D/g,""),date=$("#p-date").value,time=$("#p-time").value,note=$("#p-note").value.trim();
     const it=allItems().find(i=>i.id===$("#p-item").value);
@@ -665,14 +670,15 @@ $("#v-admin").addEventListener("submit",async e=>{e.preventDefault();
     const others=l.filter(x=>x!==b&&(x.status==="pending"||x.status==="booked")&&x.date===date&&x.time===time).length;
     phoneMsg=`已登記 ${fmtDate(date)} ${time} ${name}，預約代碼 ${b.code}。${others?`同時段還有 ${others} 筆線上預約待確認，記得到行事曆處理。`:""}`;
     renderAdmin();return}
-  if(e.target.id==="adm"){admMsg=admErr="";const em=$("#adm-email").value.trim().toLowerCase(),pw=$("#adm-pw").value;
-    const y=window.scrollY,re=()=>{renderAdmin();window.scrollTo(0,y);const ie=$("#adm-email"),ip=$("#adm-pw");if(ie&&!admMsg){ie.value=em;ip.value=pw}};
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){admErr="請輸入正確的 Email。";return re()}
-    if(OWNER_EMAILS.includes(em)||(admins||[]).some(a=>a.email===em)){admErr="這個 Email 已經是管理員了。";return re()}
+  if(e.target.id==="adm"){admMsg=admErr="";const nm=$("#adm-name").value.trim().slice(0,20),ph=$("#adm-phone").value.replace(/\D/g,""),pw=$("#adm-pw").value,em=staffEmail(ph);
+    const y=window.scrollY,re=()=>{renderAdmin();window.scrollTo(0,y);if($("#adm-phone")&&!admMsg){$("#adm-name").value=nm;$("#adm-phone").value=ph;$("#adm-pw").value=pw}};
+    if(!nm){admErr="請填寫名字。";return re()}
+    if(!/^09\d{8}$/.test(ph)){admErr="手機號碼請輸入 09 開頭的 10 位數字。";return re()}
+    if((admins||[]).some(a=>a.email===em)){admErr="這支號碼已經是管理員了。";return re()}
     if(pw.length<6){admErr="密碼至少要 6 個字。";return re()}
     admBusy=true;re();
-    try{const existed=await addAdmin(em,pw);admins=null;await loadAdmins();
-      admMsg=existed?`已新增 ${em}。這個 Email 原本就有帳號，請他用原本的密碼登入。`:`已新增 ${em}，請把 Email 和密碼告訴他。`}
+    try{const existed=await addAdmin(em,pw,{name:nm,phone:ph});admins=null;await loadAdmins();
+      admMsg=existed?`已新增 ${esc(nm)}。這支號碼之前建過帳號，密碼沒有改變，請他用之前的密碼登入。`:`已新增 ${esc(nm)}，請告訴他用手機號碼 ${fmtPhone(ph)} 和你設的密碼登入。`}
     catch(er){admErr=er.message}
     admBusy=false;return re()}
   if(e.target.id==="af"){adminPhone=$("#a-phone").value.replace(/\D/g,"")||null;adminRedeem=false;adminFlash="";try{await fetchMember(adminPhone)}catch(er){console.warn(er)}renderAdmin();return}
