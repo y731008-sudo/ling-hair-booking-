@@ -178,9 +178,10 @@ const SHOP = { open:"13:00", close:"22:00" /* 最後收客時間 */, step:30, ca
 const PAYS=[["cash","現金"],["linepay","LINE Pay"],["twpay","台灣Pay"],["jkopay","街口支付"],["pxpay","全支付"],["easywallet","悠遊付"],["icashpay","icash Pay"],["card","信用卡"],["transfer","銀行轉帳"]];
 const payName=id=>(PAYS.find(p=>p[0]===id)||[,id])[1];
 const SKEY="salon-settings-v1";
-function applySettings(s){if(s){SHOP.closedWeekdays=s.closedWeekdays||[];SHOP.closedDates=s.closedDates||[];if(s.reward)SHOP.reward=s.reward;if(s.goal)SHOP.goal=s.goal;if(s.pay)SHOP.pay=s.pay;if(s.qr)SHOP.qr=s.qr}}
+function applySettings(s){if(s){SHOP.closedWeekdays=s.closedWeekdays||[];SHOP.closedDates=s.closedDates||[];SHOP.blocked=s.blocked||{};if(s.reward)SHOP.reward=s.reward;if(s.goal)SHOP.goal=s.goal;if(s.pay)SHOP.pay=s.pay;if(s.qr)SHOP.qr=s.qr}}
 if(!CLOUD){try{applySettings(JSON.parse(localStorage.getItem(SKEY)||"null"))}catch(e){}}
-function saveSettings(){const v={closedWeekdays:SHOP.closedWeekdays,closedDates:SHOP.closedDates,reward:SHOP.reward,goal:SHOP.goal,pay:SHOP.pay,qr:SHOP.qr};
+function saveSettings(){const today=ymd(new Date()),blocked={};for(const [d,t] of Object.entries(SHOP.blocked||{}))if(d>=today&&t.length)blocked[d]=t;SHOP.blocked=blocked;
+  const v={closedWeekdays:SHOP.closedWeekdays,closedDates:SHOP.closedDates,blocked,reward:SHOP.reward,goal:SHOP.goal,pay:SHOP.pay,qr:SHOP.qr};
   if(CLOUD){fdb.collection("config").doc("shop").set(v).catch(e=>console.warn("設定儲存失敗",e));return}
   try{localStorage.setItem(SKEY,JSON.stringify(v))}catch(e){}}
 const isClosed=(d,k)=>SHOP.closedWeekdays.includes(d.getDay())||SHOP.closedDates.includes(k);
@@ -331,7 +332,8 @@ function slotsOf(){const [oh,om]=SHOP.open.split(":").map(Number),[ch,cm]=SHOP.c
 const isActive=b=>b.status==="pending"||b.status==="confirmed"||b.status==="booked";
 function taken(date,time){return load().filter(b=>isActive(b)&&b.date===date&&b.time===time).length}
 /* 每個時段最多 SHOP.capacity 位客人，待確認的預約也算；店家確認過的時段一定鎖住 */
-function slotBlocked(date,time){const l=load().filter(b=>isActive(b)&&b.date===date&&b.time===time);return l.some(b=>b.status==="confirmed")||l.length>=SHOP.capacity}
+/* 店家在行事曆關閉的時段（現場客、其他服務）也不能預約 */
+function slotBlocked(date,time){if(((SHOP.blocked||{})[date]||[]).includes(time))return true;const l=load().filter(b=>isActive(b)&&b.date===date&&b.time===time);return l.some(b=>b.status==="confirmed")||l.length>=SHOP.capacity}
 function genCode(){const used=new Set(load().filter(x=>isActive(x)&&!isPast(x.date,x.time)).map(x=>x.code));
   const free=[];for(let i=0;i<100;i++){const c=pad(i);if(!used.has(c))free.push(c)}
   let code=free.length?free[Math.random()*free.length|0]:null;
@@ -617,7 +619,10 @@ function calHTML(){
     ${act?(adminAct&&adminAct.code===b.code?`<div class="confirm">${adminAct.type==="decline"?"確定婉拒這筆預約？":"確定取消這筆預約？"}時段會重新開放。<div class="actions"><button class="btn danger" data-ayes="${b.code}">確定</button><button class="btn ghost" data-ano>先不要</button></div></div>`
       :`<div class="actions">${b.status!=="confirmed"?`<button class="btn" data-aconfirm="${b.code}">確認預約</button><button class="btn ghost" data-adecline="${b.code}">婉拒</button>`:`<button class="btn ghost" data-acancel="${b.code}">取消預約</button>`}</div>`):""}
     </div>`}).join(""):`<p class="sec-note">這天還沒有預約。</p>`}</div>
-  <div class="actions"><button class="btn" data-atab="phone">在這天新增電話預約</button></div>`;
+  <div class="actions"><button class="btn" data-atab="phone">在這天新增電話預約</button></div>
+  ${isClosed(dd,calDay)?"":(()=>{const bl=(SHOP.blocked||{})[calDay]||[],act=all.filter(b=>isActive(b)&&b.date===calDay).map(b=>b.time),ts=slotsOf().filter(t=>!isPast(calDay,t));
+    return `<h2 class="sec" style="font-size:18px">關閉時段</h2><p class="sec-note">現場客人或其他服務佔用的時間，點一下關閉，客人就不能選；再點一下重新開放。${bl.length?`目前關閉 ${bl.length} 個時段。`:""}</p>
+    ${ts.length?`<div class="chips">${ts.map(t=>act.includes(t)&&!bl.includes(t)?`<button class="chip" disabled style="opacity:.45">${t} 已預約</button>`:`<button class="chip" data-blk="${t}" aria-pressed="${bl.includes(t)}">${bl.includes(t)?"✕ ":""}${t}</button>`).join("")}</div>`:`<p class="sec-note">這天已經沒有可以設定的時段。</p>`}`})()}`;
 }
 function phoneHTML(){
   const items=allItems();
@@ -653,6 +658,7 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.atab){adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
   if(t.dataset.cmon){calMonth+=+t.dataset.cmon;re();return}
   if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
+  if(t.dataset.blk){const a=(SHOP.blocked=SHOP.blocked||{})[calDay]=(SHOP.blocked[calDay]||[]).slice(),i=a.indexOf(t.dataset.blk);i<0?a.push(t.dataset.blk):a.splice(i,1);a.sort();saveSettings();re();return}
   if(t.dataset.aconfirm){setStatus(t.dataset.aconfirm,"confirmed");re();return}
   if(t.dataset.adecline){adminAct={code:t.dataset.adecline,type:"decline"};re();return}
   if(t.dataset.acancel){adminAct={code:t.dataset.acancel,type:"cancel"};re();return}
