@@ -276,23 +276,33 @@ function simpleCard(x,set){
     <span class="name">${x.name}${x.desc?`<span class="meta" style="display:block;font-family:var(--f-body);font-weight:400">${x.desc}</span>`:""}</span>
     <span class="price">${money(x.price)}${x.up?"<small>up</small>":""}</span></div>`;
 }
+/* 價目表分頁：一個系列一頁 */
+const SERIES=[["wash","洗護方案"],["care","髮膜護髮"],["perm","燙髮"],["dye","染髮"],["addon","加購"]];
+let menuTab="wash";
+function seriesCount(k){return k==="wash"?(sel.wash?1:0):k==="care"?Object.keys(sel.care).length:sel[k].size}
 function renderMenu(){
   const h=[];
-  h.push(`<h2 class="sec">洗護方案</h2><p class="sec-note">每個方案擇一，皆含洗後保養與專業吹整。</p><div class="list">`);
+  h.push(`<div class="series" role="tablist" style="position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:12px 0 10px;margin:0 -2px">
+    ${SERIES.map(([k,n])=>{const c=seriesCount(k);return `<button class="chip" role="tab" data-series="${k}" aria-pressed="${menuTab===k}" style="flex:1 0 auto;padding:6px 9px;border-radius:999px;font-size:13.5px">${n}${c?` <b style="color:var(--gold)">${c}</b>`:""}</button>`}).join("")}</div>`);
+  if(menuTab==="wash"){h.push(`<h2 class="sec">洗護方案</h2><p class="sec-note">每個方案擇一，皆含洗後保養與專業吹整。</p><div class="list">`);
   for(const w of WASH){const on=sel.wash===w.id;
     h.push(`<div class="card${on?" sel":""}"><div class="row"><span class="name">${w.name}</span><span class="price">${money(w.price)}</span></div>
     ${incHTML(w.inc)}<button class="pick" data-wash="${w.id}">${on?"已選擇 ✓":"選這個方案"}</button></div>`);}
-  h.push(`</div><h2 class="sec">髮膜護髮</h2><p class="sec-note">依髮長計價，點選髮長即可加入。</p><div class="list">`);
+  h.push(`</div>`)}
+  if(menuTab==="care"){h.push(`<h2 class="sec">髮膜護髮</h2><p class="sec-note">依髮長計價，點選髮長即可加入。</p><div class="list">`);
   for(const c of CARE){const s=sel.care[c.id];
     h.push(`<div class="card${s?" sel":""}"><div class="row"><span class="name">${c.name}</span><span class="price">${money(c.prices[0])}<small>起</small></span></div>
     ${incHTML(c.inc)}
     <div class="chips">${LENGTHS.map((l,i)=>`<button class="chip" aria-pressed="${s&&s.len===i}" data-care="${c.id}" data-len="${i}">${l} ${money(c.prices[i])}</button>`).join("")}</div>
     ${s?`<button class="pick" data-care-off="${c.id}">取消此項</button>`:""}</div>`);}
-  h.push(`</div><h2 class="sec">燙髮區</h2><div class="list">${PERM.map(x=>simpleCard(x,sel.perm)).join("")}</div>
+  h.push(`</div>`)}
+  if(menuTab==="perm")h.push(`<h2 class="sec">燙髮區</h2><div class="list">${PERM.map(x=>simpleCard(x,sel.perm)).join("")}</div>
     <p class="fine">以上髮量過多需增加收費；特殊設計費另計。</p>`);
-  h.push(`<h2 class="sec">染髮區</h2><div class="list">${DYE.map(x=>simpleCard(x,sel.dye)).join("")}</div>
+  if(menuTab==="dye")h.push(`<h2 class="sec">染髮區</h2><div class="list">${DYE.map(x=>simpleCard(x,sel.dye)).join("")}</div>
     <p class="fine">以上染特殊顏色、髮量過多、特長需增加收費。</p>`);
-  h.push(`<h2 class="sec">加購區</h2><div class="list">${ADDON.map(x=>simpleCard(x,sel.addon)).join("")}</div>`);
+  if(menuTab==="addon")h.push(`<h2 class="sec">加購區</h2><div class="list">${ADDON.map(x=>simpleCard(x,sel.addon)).join("")}</div>`);
+  const k=SERIES.findIndex(x=>x[0]===menuTab),prev=SERIES[k-1],next=SERIES[k+1];
+  h.push(`<div class="actions">${prev?`<button class="btn ghost" data-series="${prev[0]}">‹ ${prev[1]}</button>`:""}${next?`<button class="btn ghost" data-series="${next[0]}">${next[1]} ›</button>`:""}</div>`);
   const wk=SHOP.closedWeekdays.slice().sort().map(i=>"週"+WK[i]).join("、");
   h.push(`<p class="hours">營業時間 ${SHOP.open}–${SHOP.close}（最後收客時間）${wk?`　·　${wk}公休`:""}　·　標示 up 的項目為起價，實際以現場評估為準</p>
     <p class="hours"><button class="chip" data-go="admin">店家後台</button></p>`);
@@ -301,6 +311,7 @@ function renderMenu(){
 function setFor(id){return id[0]==="p"?sel.perm:id[0]==="d"?sel.dye:sel.addon}
 $("#v-menu").addEventListener("click",e=>{
   const t=e.target.closest("button,[data-toggle]");if(!t)return;
+  if(t.dataset.series){menuTab=t.dataset.series;renderMenu();const m=$("#v-menu");if(m.getBoundingClientRect().top<0)m.scrollIntoView();t.blur();return}
   if(t.dataset.wash){sel.wash=sel.wash===t.dataset.wash?null:t.dataset.wash}
   else if(t.dataset.care){const id=t.dataset.care,len=+t.dataset.len;
     sel.care[id]=sel.care[id]&&sel.care[id].len===len?undefined:{len,ext:sel.care[id]?.ext||new Set()};if(!sel.care[id])delete sel.care[id]}
