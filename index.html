@@ -153,7 +153,7 @@ select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
     <button role="tab" id="tab-book" aria-selected="false" data-view="book">預約時間</button>
     <button role="tab" id="tab-mine" aria-selected="false" data-view="mine">查詢／取消</button>
     <button role="tab" id="tab-member" aria-selected="false" data-view="member">會員集點</button>
-    <button role="tab" id="tab-card" aria-selected="false" data-view="card" hidden>會員卡</button>
+    <button role="tab" id="tab-card" aria-selected="false" data-view="card">會員卡</button>
   </nav>
 </header>
 
@@ -799,14 +799,14 @@ const itemsList=()=>`<datalist id="w-items">${allItems().map(i=>`<option value="
 /* --- 客人：我的會員卡 --- */
 let myCard=null;try{myCard=localStorage.getItem(CARDKEY)}catch(e){}
 let cardW=null,cardLogs=null,cardErr="";
-function setCard(tk){myCard=tk;cardW=cardLogs=null;cardErr="";try{tk?localStorage.setItem(CARDKEY,tk):localStorage.removeItem(CARDKEY)}catch(e){}$("#tab-card").hidden=!tk}
+function setCard(tk){myCard=tk;cardW=cardLogs=null;cardErr="";try{tk?localStorage.setItem(CARDKEY,tk):localStorage.removeItem(CARDKEY)}catch(e){}}
 async function loadCard(){if(!myCard)return;cardErr="";
   try{cardW=await getWallet(myCard);if(!cardW)cardErr="找不到這張會員卡，請到店裡請店家重新給你綁定 QR code。";else cardLogs=await getLogs(myCard)}
   catch(e){console.warn(e);cardErr="網路不穩，請稍後再試。"}
   if(view==="card")renderCard()}
 function plansNote(){const ps=(SHOP.plans||[]).filter(p=>p.on);return ps.length?`<h2 class="sec">儲值方案</h2><div class="list">${ps.map(p=>`<div class="card"><span class="name" style="font-size:16px">${esc(planName(p))}</span></div>`).join("")}</div><p class="fine">到店結帳時告訴店家要儲值即可。</p>`:""}
 function renderCard(){const el=$("#v-card");
-  if(!myCard){el.innerHTML=`<h2 class="sec">會員卡</h2><p class="sec-note">到店儲值時，請店家給你「綁定 QR code」，用手機相機掃描後，會員卡就會存在這支手機。</p>${plansNote()}`;return}
+  if(!myCard){el.innerHTML=`<h2 class="sec">儲值會員卡</h2><p class="sec-note">這支手機還沒有綁定會員卡。</p><div class="card"><p style="margin:0">到店儲值或結帳時，請店家出示「綁定 QR code」，用手機相機掃描，會員卡就會存到這支手機。之後打開這個網站的「會員卡」，就看得到條碼、餘額、贈品和所有紀錄。</p></div>${plansNote()}`;return}
   if(!cardW){el.innerHTML=`<h2 class="sec">我的會員卡</h2>${cardErr?`<p class="err">${cardErr}</p><div class="actions"><button class="btn ghost" data-cardre>重新整理</button><button class="btn ghost" data-cardrm>移除這張卡</button></div>`:`<p class="sec-note">讀取中…</p>`}`;return}
   const w=cardW;
   el.innerHTML=`<h2 class="sec">我的會員卡</h2>
@@ -993,6 +993,5 @@ $("#bar-next").addEventListener("click",()=>{lastBooking=null;go("book")});
 /* 範例：預設選好一個方案，讓第一次打開就看得到底部金額列 */
 sel.wash="w1200";
 if(!F.member)$("#tab-member").hidden=true;
-$("#tab-card").hidden=!myCard;
 renderMenu();renderMine();renderMember();updateBar();startCloud();checkHash();
 </script>
