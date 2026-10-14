@@ -124,6 +124,24 @@ select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
 .chk{display:flex;gap:8px;align-items:center;margin-top:14px;font-size:14px}
 .empty{text-align:center;color:var(--ink-2);padding:28px 10px}
 .hours{font-size:13px;color:var(--ink-2);margin:14px 0 0;text-align:center}
+/* 儲值會員卡 */
+.bal{font-family:var(--f-display);font-size:38px;color:var(--gold-soft);line-height:1.2;font-variant-numeric:tabular-nums}
+.gl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.gl span{font-size:13px;border:1px solid color-mix(in srgb,var(--gold) 60%,transparent);color:var(--gold-soft);border-radius:999px;padding:2px 10px}
+.qrbox{width:190px;margin:12px auto 6px;background:#fff;padding:6px;border-radius:10px}
+.qrbox img{display:block;width:100%;aspect-ratio:1;image-rendering:pixelated}
+.log{list-style:none;margin:0;padding:0}
+.log li{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.log li:last-child{border-bottom:0}
+.log small{display:block;color:var(--ink-2);font-size:12px}
+.log .r{text-align:right;max-width:48%;font-variant-numeric:tabular-nums}
+.plus{color:var(--ok)}.minus{color:var(--danger)}
+.grow{display:flex;gap:6px;margin-top:6px;align-items:center}
+.grow .t{padding:8px 10px;font-size:15px}
+.wrow{font:inherit;color:inherit;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;width:100%}
+#scan{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:20;display:grid;place-items:center;padding:16px}
+.scan-in{width:100%;max-width:420px;text-align:center;color:#fff}
+.scan-in video{width:100%;border-radius:14px;background:#000;outline:3px solid var(--gold);outline-offset:-3px}
 @media (prefers-reduced-motion:no-preference){.card,.chip,.date{transition:background .15s,border-color .15s}}
 </style>
 
@@ -135,6 +153,7 @@ select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
     <button role="tab" id="tab-book" aria-selected="false" data-view="book">預約時間</button>
     <button role="tab" id="tab-mine" aria-selected="false" data-view="mine">查詢／取消</button>
     <button role="tab" id="tab-member" aria-selected="false" data-view="member">會員集點</button>
+    <button role="tab" id="tab-card" aria-selected="false" data-view="card" hidden>會員卡</button>
   </nav>
 </header>
 
@@ -143,6 +162,7 @@ select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
   <section id="v-book" hidden></section>
   <section id="v-mine" hidden></section>
   <section id="v-member" hidden></section>
+  <section id="v-card" hidden></section>
   <section id="v-admin" hidden></section>
 </main>
 
@@ -174,14 +194,15 @@ if(CLOUD){firebase.initializeApp(FIREBASE_CONFIG);fdb=firebase.firestore();fauth
 async function sha(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("ling|"+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
 const SHOP = { open:"13:00", close:"22:00" /* 最後收客時間 */, step:30, capacity:1, days:21, closedWeekdays:[] /* 例：[1] = 週一公休 */, closedDates:[] /* 例：["2026-10-10"] */,
   goal:10 /* 集滿幾點可兌換 */, reward:"w500" /* 兌換贈送的項目 */,
-  pay:["cash","linepay","twpay"] /* 店家接受的付款方式 */, qr:{} /* 各付款方式的收款碼圖片 */ };
+  pay:["cash","linepay","twpay"] /* 店家接受的付款方式 */, qr:{} /* 各付款方式的收款碼圖片 */,
+  plans:[{id:"p1",pay:5000,bonus:500,gifts:[],on:true},{id:"p2",pay:10000,bonus:1000,gifts:[{name:"結構式系統護髮",kind:"service",n:1},{name:"洗髮精",kind:"product",n:1}],on:true}] /* 儲值方案（範例，店家設定可改） */ };
 const PAYS=[["cash","現金"],["linepay","LINE Pay"],["twpay","台灣Pay"],["jkopay","街口支付"],["pxpay","全支付"],["easywallet","悠遊付"],["icashpay","icash Pay"],["card","信用卡"],["transfer","銀行轉帳"]];
 const payName=id=>(PAYS.find(p=>p[0]===id)||[,id])[1];
 const SKEY="salon-settings-v1";
-function applySettings(s){if(s){SHOP.closedWeekdays=s.closedWeekdays||[];SHOP.closedDates=s.closedDates||[];SHOP.blocked=s.blocked||{};if(s.reward)SHOP.reward=s.reward;if(s.goal)SHOP.goal=s.goal;if(s.pay)SHOP.pay=s.pay;if(s.qr)SHOP.qr=s.qr}}
+function applySettings(s){if(s){SHOP.closedWeekdays=s.closedWeekdays||[];SHOP.closedDates=s.closedDates||[];SHOP.blocked=s.blocked||{};if(s.reward)SHOP.reward=s.reward;if(s.goal)SHOP.goal=s.goal;if(s.pay)SHOP.pay=s.pay;if(s.qr)SHOP.qr=s.qr;if(Array.isArray(s.plans))SHOP.plans=s.plans}}
 if(!CLOUD){try{applySettings(JSON.parse(localStorage.getItem(SKEY)||"null"))}catch(e){}}
 function saveSettings(){const today=ymd(new Date()),blocked={};for(const [d,t] of Object.entries(SHOP.blocked||{}))if(d>=today&&t.length)blocked[d]=t;SHOP.blocked=blocked;
-  const v={closedWeekdays:SHOP.closedWeekdays,closedDates:SHOP.closedDates,blocked,reward:SHOP.reward,goal:SHOP.goal,pay:SHOP.pay,qr:SHOP.qr};
+  const v={closedWeekdays:SHOP.closedWeekdays,closedDates:SHOP.closedDates,blocked,reward:SHOP.reward,goal:SHOP.goal,pay:SHOP.pay,qr:SHOP.qr,plans:SHOP.plans};
   if(CLOUD){fdb.collection("config").doc("shop").set(v).catch(e=>console.warn("設定儲存失敗",e));return}
   try{localStorage.setItem(SKEY,JSON.stringify(v))}catch(e){}}
 const isClosed=(d,k)=>SHOP.closedWeekdays.includes(d.getDay())||SHOP.closedDates.includes(k);
@@ -559,11 +580,12 @@ function renderAdmin(){
   const dates=SHOP.closedDates.slice().sort();
   const booked=d=>load().filter(b=>isActive(b)&&b.date===d).length;
   const ax=adminPhone&&getMember(adminPhone);
-  const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],...(F.member?[["member","會員集點"]]:[]),["set","店家設定"]];
+  const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],...(F.member?[["member","會員集點"]]:[]),["wallet","儲值會員"],["set","店家設定"]];
   const sub=`<div class="subtabs">${tabs.map(([k,n])=>`<button class="chip" data-atab="${k}" aria-pressed="${adminTab===k}">${n}</button>`).join("")}${CLOUD?`<button class="chip" data-signout>登出</button>`:""}</div>`;
   let body;
   if(adminTab==="cal")body=calHTML();
   else if(adminTab==="phone")body=phoneHTML();
+  else if(adminTab==="wallet")body=walletHTML();
   else if(adminTab==="member")body=`${F.member?`<h2 class="sec">會員集點</h2><p class="sec-note">客人結帳時輸入手機號碼，幫他蓋點或兌換贈品。</p>
   <form id="af" novalidate><div style="display:flex;gap:8px"><input class="t" id="a-phone" type="tel" inputmode="numeric" placeholder="會員手機號碼" value="${adminPhone||""}" style="flex:1;min-width:0"><button class="btn" type="submit">查詢</button></div></form>
   ${adminPhone&&!ax?`<p class="err">查不到這支號碼的會員。</p>`:""}
@@ -589,9 +611,10 @@ function renderAdmin(){
   <div class="list" style="margin-top:12px">${dates.length?dates.map(d=>`<div class="card"><div class="row"><span class="name" style="font-size:16px">${fmtDate(d)}</span><button class="chip" data-rmdate="${d}">移除</button></div>
     ${booked(d)?`<p class="err">這天已有 ${booked(d)} 筆預約，請記得聯絡客人改期。</p>`:""}</div>`).join(""):`<p class="sec-note">目前沒有指定休假日。</p>`}</div>
   <p class="fine">設定後，客人在「預約時間」頁看到該日期會顯示「公休」，無法預約。</p>
+  ${plansHTML()}
   ${adminsHTML()}
   <div class="actions"><button class="btn ghost" data-go="menu">回價目表</button></div>`;
-  $("#v-admin").innerHTML=sub+body;
+  $("#v-admin").innerHTML=sub+body;drawQRs($("#v-admin"));
 }
 let adminPhone=null,adminRedeem=false,adminFlash="";
 let adminTab="cal",calMonth=0,calDay=ymd(new Date()),adminAct=null,phoneMsg="",phoneErr="";
@@ -650,12 +673,12 @@ $("#v-admin").addEventListener("change",e=>{
 });
 $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;
   const re=()=>{const y=window.scrollY;renderAdmin();window.scrollTo(0,y)};
-  if(t.dataset.signout!==undefined){admins=null;admMsg=admErr="";fauth.signOut();return}
+  if(t.dataset.signout!==undefined){admins=null;myName=null;wSel=null;wList=null;admMsg=admErr="";fauth.signOut();return}
   if(t.dataset.admrm){admRm=t.dataset.admrm;admMsg=admErr="";re();return}
   if(t.dataset.admrmNo!==undefined){admRm=null;re();return}
   if(t.dataset.admrmYes){const em=t.dataset.admrmYes;t.disabled=true;
     fdb.collection("admins").doc(em).delete().then(()=>{admins=admins.filter(a=>a.email!==em);admMsg="已移除。"}).catch(er=>{console.warn(er);admErr="移除失敗，請檢查網路。"}).finally(()=>{admRm=null;re()});return}
-  if(t.dataset.atab){adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
+  if(t.dataset.atab){if(t.dataset.atab==="wallet"&&adminTab!=="wallet"){wList=null;wPanel=wSel?wPanel:null}adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
   if(t.dataset.cmon){calMonth+=+t.dataset.cmon;re();return}
   if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
   if(t.dataset.blk){const a=(SHOP.blocked=SHOP.blocked||{})[calDay]=(SHOP.blocked[calDay]||[]).slice(),i=a.indexOf(t.dataset.blk);i<0?a.push(t.dataset.blk):a.splice(i,1);a.sort();saveSettings();re();return}
@@ -675,7 +698,7 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.wd){const i=+t.dataset.wd,a=SHOP.closedWeekdays;a.includes(i)?a.splice(a.indexOf(i),1):a.push(i);saveSettings();renderAdmin();renderMenu()}
   else if(t.dataset.rmdate){SHOP.closedDates=SHOP.closedDates.filter(d=>d!==t.dataset.rmdate);saveSettings();renderAdmin()}
 });
-$("#v-admin").addEventListener("submit",async e=>{e.preventDefault();
+$("#v-admin").addEventListener("submit",async e=>{if(e.target.id.startsWith("w-"))return;e.preventDefault();
   if(e.target.id==="lg"){adminLoginErr="";try{await fauth.signInWithEmailAndPassword(loginId($("#lg-email").value),$("#lg-pw").value)}catch(er){adminLoginErr="帳號或密碼不正確。";renderAdmin()}return}
   if(e.target.id==="pf"){phoneMsg=phoneErr="";
     const name=$("#p-name").value.trim(),phone=$("#p-phone").value.replace(/\D/g,""),date=$("#p-date").value,time=$("#p-time").value,note=$("#p-note").value.trim();
@@ -709,14 +732,251 @@ $("#v-admin").addEventListener("submit",async e=>{e.preventDefault();
   if(!v){err.textContent="請先選擇日期。";err.hidden=false;return}
   if(!SHOP.closedDates.includes(v))SHOP.closedDates.push(v);saveSettings();renderAdmin()});
 
+/* ===== 儲值會員卡 =====
+   wallets/{隨機卡號}：姓名、手機、餘額、贈品（名稱→剩餘數量）；只有店家能新增或修改，客人知道卡號才讀得到
+   wallets/{卡號}/logs：每一筆開卡、儲值、扣款、使用贈品、調整、修改資料，只能新增，不能改也不能刪 */
+const QR_LIB="lib/qrcode.js";  /* 和網站放在一起（deploy/lib） */
+const JSQR_LIB="lib/jsQR.js";
+const WKEY="salon-wallets-v1",CARDKEY="salon-card";let memW={};
+function loadW(){try{const s=localStorage.getItem(WKEY);return s?JSON.parse(s):memW}catch(e){return memW}}
+function saveW(w){memW=w;try{localStorage.setItem(WKEY,JSON.stringify(w))}catch(e){}}
+const newToken=()=>[...crypto.getRandomValues(new Uint8Array(16))].map(x=>"abcdefghjkmnpqrstuvwxyz23456789"[x%31]).join("");
+const cardURL=tk=>location.origin+location.pathname+"#card="+tk;
+const parseTk=t=>((String(t).match(/card=([a-z0-9]{16})/)||String(t).trim().match(/^([a-z0-9]{16})$/)||[])[1])||null;
+const unit=k=>k==="product"?"個":"次";
+const userErr=m=>Object.assign(new Error(m),{user:true});
+const errMsg=er=>er&&er.user?er.message:"網路不穩，沒有完成，請再試一次。";
+function planName(p){const parts=[...(p.bonus?[money(p.bonus)]:[]),...(p.gifts||[]).filter(g=>g.name).map(g=>`${g.name}×${g.n}`)];return `儲 ${money(p.pay)}${parts.length?" 送 "+parts.join("＋"):""}`}
+const fmtDT=iso=>{const d=new Date(iso),y=d.getFullYear()!==new Date().getFullYear()?d.getFullYear()+"/":"";return `${y}${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+const libs={};
+function lib(url,name){return libs[url]=libs[url]||new Promise((ok,no)=>{if(window[name])return ok(window[name]);const s=document.createElement("script");s.src=url;s.onload=()=>ok(window[name]);s.onerror=()=>{delete libs[url];no(new Error("load"))};document.head.appendChild(s)})}
+function drawQRs(root){root.querySelectorAll("img[data-qr]").forEach(async i=>{try{const q=await lib(QR_LIB,"qrcode"),c=q(0,"M");c.addData(i.dataset.qr);c.make();i.src=c.createDataURL(6,2)}catch(e){i.alt="條碼載入失敗，請檢查網路後重新整理"}})}
+
+/* 計算一筆異動後的餘額和贈品；不夠扣就回傳錯誤 */
+function applyOp(w,op){const bal=(w.balance||0)+(op.amount||0);
+  if(bal<0)return {err:`餘額不足，目前只有 ${money(w.balance||0)}。`};
+  const g=JSON.parse(JSON.stringify(w.gifts||{}));
+  for(const x of op.gifts||[]){const c=g[x.name]||{n:0,kind:x.kind||"service"};
+    if(c.n+x.n<0)return {err:`「${x.name}」只剩 ${c.n} ${unit(c.kind)}，不夠扣。`};
+    c.n+=x.n;if(c.n===0)delete g[x.name];else g[x.name]=c}
+  return {balance:bal,gifts:g}}
+let myName=null;
+async function opName(){if(!CLOUD)return "店家";const u=fauth.currentUser;if(!u)return "";if(isOwner())return "店主";if(myName)return myName;
+  const ph=u.email.endsWith("@"+STAFF_DOMAIN)?fmtPhone(u.email.split("@")[0]):u.email;
+  try{const d=await fdb.collection("admins").doc(u.email.toLowerCase()).get();myName=(d.exists&&d.data().name)||ph}catch(e){myName=ph}return myName}
+async function getWallet(tk){if(!tk)return null;
+  if(!CLOUD){const w=loadW()[tk];if(!w)return null;const {logs,...r}=w;return {tk,...r}}
+  const d=await fdb.collection("wallets").doc(tk).get();return d.exists?{tk,...d.data()}:null}
+async function getLogs(tk){if(!CLOUD)return ((loadW()[tk]||{}).logs||[]).slice(0,200);
+  const q=await fdb.collection("wallets").doc(tk).collection("logs").orderBy("t","desc").limit(200).get();return q.docs.map(d=>d.data())}
+async function findWallets(phone){
+  if(!CLOUD)return Object.entries(loadW()).filter(([,w])=>!phone||w.phone===phone).map(([tk,{logs,...w}])=>({tk,...w})).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,50);
+  const q=phone?await fdb.collection("wallets").where("phone","==",phone).get():await fdb.collection("wallets").orderBy("updatedAt","desc").limit(50).get();
+  return q.docs.map(d=>({tk:d.id,...d.data()}))}
+async function createWallet(name,phone){if((await findWallets(phone)).length)throw userErr("這支手機號碼已經有會員卡了，請直接查詢。");
+  const tk=newToken(),t=new Date().toISOString(),by=await opName(),w={name,phone,balance:0,gifts:{},createdAt:t,updatedAt:t},log={t,type:"open",amount:0,gifts:[],balance:0,note:"",by};
+  if(!CLOUD){const all=loadW();all[tk]={...w,logs:[log]};saveW(all);return {tk,...w}}
+  const ref=fdb.collection("wallets").doc(tk),b=fdb.batch();b.set(ref,w);b.set(ref.collection("logs").doc(),log);await b.commit();return {tk,...w}}
+async function walletDo(tk,op){const t=new Date().toISOString(),by=await opName();
+  const mk=w=>{const r=applyOp(w,op);if(r.err)throw userErr(r.err);
+    const log={t,type:op.type,amount:op.amount||0,gifts:(op.gifts||[]).map(g=>({name:g.name,n:g.n})),balance:r.balance,note:op.note||"",by};
+    if(op.paid!=null){log.paid=op.paid;log.pay=op.pay||""}
+    return {upd:{...(op.patch||{}),balance:r.balance,gifts:r.gifts,updatedAt:t},log}};
+  if(!CLOUD){const all=loadW(),w=all[tk];if(!w)throw userErr("找不到這張會員卡。");const {upd,log}=mk(w);Object.assign(w,upd);(w.logs=w.logs||[]).unshift(log);saveW(all);const {logs,...r}=w;return {tk,...r}}
+  const ref=fdb.collection("wallets").doc(tk);
+  return fdb.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw userErr("找不到這張會員卡。");const {upd,log}=mk(s.data());
+    tx.update(ref,upd);tx.set(ref.collection("logs").doc(),log);return {tk,...s.data(),...upd}})}
+
+const WT={open:"開卡",topup:"儲值",spend:"扣款",redeem:"使用贈品",adjust:"調整",edit:"修改資料"};
+function giftsHTML(w){const g=Object.entries(w.gifts||{});return g.length?`<p class="meta" style="margin:8px 0 0">贈品</p><div class="gl">${g.map(([n,x])=>`<span>${esc(n)}　剩 ${x.n} ${unit(x.kind)}</span>`).join("")}</div>`:""}
+function logsHTML(l,staff){if(!l)return `<p class="sec-note">讀取中…</p>`;if(!l.length)return `<p class="sec-note">還沒有紀錄。</p>`;
+  return `<div class="card"><ul class="log">${l.map(x=>{const gs=(x.gifts||[]).map(g=>`${esc(g.name)} ${g.n>0?"＋":"−"}${Math.abs(g.n)}`).join("、");
+    const sub=[x.note?esc(x.note):"",x.pay?payName(x.pay):"",staff&&x.by?"經手 "+esc(x.by):""].filter(Boolean).join("・");
+    return `<li><span><b>${WT[x.type]||esc(x.type)}</b>　${fmtDT(x.t)}${sub?`<small>${sub}</small>`:""}</span>
+    <span class="r">${x.amount?`<span class="${x.amount>0?"plus":"minus"}">${x.amount>0?"+":"−"}${money(Math.abs(x.amount))}</span>`:""}${gs?`<small>${gs}</small>`:""}${x.amount||x.type==="topup"?`<small>餘額 ${money(x.balance)}</small>`:""}</span></li>`}).join("")}</ul></div>`}
+const itemsList=()=>`<datalist id="w-items">${allItems().map(i=>`<option value="${esc(i.name)}">`).join("")}</datalist>`;
+
+/* --- 客人：我的會員卡 --- */
+let myCard=null;try{myCard=localStorage.getItem(CARDKEY)}catch(e){}
+let cardW=null,cardLogs=null,cardErr="";
+function setCard(tk){myCard=tk;cardW=cardLogs=null;cardErr="";try{tk?localStorage.setItem(CARDKEY,tk):localStorage.removeItem(CARDKEY)}catch(e){}$("#tab-card").hidden=!tk}
+async function loadCard(){if(!myCard)return;cardErr="";
+  try{cardW=await getWallet(myCard);if(!cardW)cardErr="找不到這張會員卡，請到店裡請店家重新給你綁定 QR code。";else cardLogs=await getLogs(myCard)}
+  catch(e){console.warn(e);cardErr="網路不穩，請稍後再試。"}
+  if(view==="card")renderCard()}
+function plansNote(){const ps=(SHOP.plans||[]).filter(p=>p.on);return ps.length?`<h2 class="sec">儲值方案</h2><div class="list">${ps.map(p=>`<div class="card"><span class="name" style="font-size:16px">${esc(planName(p))}</span></div>`).join("")}</div><p class="fine">到店結帳時告訴店家要儲值即可。</p>`:""}
+function renderCard(){const el=$("#v-card");
+  if(!myCard){el.innerHTML=`<h2 class="sec">會員卡</h2><p class="sec-note">到店儲值時，請店家給你「綁定 QR code」，用手機相機掃描後，會員卡就會存在這支手機。</p>${plansNote()}`;return}
+  if(!cardW){el.innerHTML=`<h2 class="sec">我的會員卡</h2>${cardErr?`<p class="err">${cardErr}</p><div class="actions"><button class="btn ghost" data-cardre>重新整理</button><button class="btn ghost" data-cardrm>移除這張卡</button></div>`:`<p class="sec-note">讀取中…</p>`}`;return}
+  const w=cardW;
+  el.innerHTML=`<h2 class="sec">我的會員卡</h2>
+  <div class="mcard"><span class="name">伶髮藝 儲值會員卡</span><p class="meta" style="margin:2px 0 0">${esc(w.name)}</p>
+    <div class="qrbox"><img data-qr="${esc(cardURL(myCard))}" alt="會員條碼"></div><p class="meta" style="text-align:center;margin:0">結帳時出示給店家掃描</p>
+    <p class="meta" style="margin:10px 0 0">儲值餘額</p><div class="bal">${money(w.balance||0)}</div>${giftsHTML(w)}</div>
+  <div class="actions"><button class="btn ghost" data-cardre>重新整理</button></div>
+  <h2 class="sec" style="font-size:17px">儲值與消費紀錄</h2>${logsHTML(cardLogs,false)}
+  ${plansNote()}
+  <div class="actions"><button class="btn ghost" data-cardrm>這不是我的卡，移除</button></div>`;
+  drawQRs(el)}
+let cardRm=false;
+$("#v-card").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.cardre!==undefined){cardW=null;renderCard();loadCard()}
+  if(t.dataset.cardrm!==undefined){if(!cardRm){cardRm=true;t.textContent="再按一次確認移除（之後要請店家重新綁定）";return}cardRm=false;setCard(null);go("menu")}});
+function checkHash(){const tk=parseTk(location.hash);if(!tk)return false;setCard(tk);try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}go("card");return true}
+window.addEventListener("hashchange",checkHash);
+
+/* --- 店家：儲值會員 --- */
+let wList=null,wSel=null,wLogs=null,wPanel=null,wMsg="",wErr="",wBusy=false,wQ="",wPlan=null,wUse=null;
+function wReset(){wMsg=wErr="";wUse=null}
+async function openWallet(tk,panel){wReset();wBusy=true;renderAdmin();
+  try{const w=await getWallet(tk);if(!w){wErr="找不到這張會員卡。";wSel=null}else{wSel=w;wPanel=panel||null;wLogs=null;getLogs(tk).then(l=>{if(wSel&&wSel.tk===tk){wLogs=l;reW()}}).catch(e=>{console.warn(e);wLogs=[]})}}
+  catch(e){console.warn(e);wErr="網路不穩，請再試一次。"}
+  wBusy=false;reW()}
+function reW(){if(view==="admin"&&adminTab==="wallet"){const y=window.scrollY;renderAdmin();window.scrollTo(0,y)}}
+async function wRun(op,ok){if(wBusy)return;wReset();wBusy=true;reW();
+  try{wSel=await walletDo(wSel.tk,op);wMsg=ok;wPanel=null;wPlan=null;wLogs=await getLogs(wSel.tk).catch(()=>wLogs)}catch(er){console.warn(er);wErr=errMsg(er)}
+  wBusy=false;wList=null;reW()}
+function walletHTML(){
+  const msgs=`${wErr?`<p class="err">${wErr}</p>`:""}${wMsg?`<p class="notice" style="color:var(--ok)">${wMsg}</p>`:""}`;
+  const top=`<h2 class="sec">儲值會員</h2>
+  <div class="actions" style="margin-top:4px"><button class="btn" data-wscan>📷 掃描會員卡</button><button class="btn ghost" data-wnew>＋ 新增會員</button></div>
+  <form id="w-q" novalidate style="margin-top:12px"><div style="display:flex;gap:8px"><input class="t" id="wq" type="tel" inputmode="numeric" placeholder="或輸入手機號碼查詢" value="${esc(wQ)}" style="flex:1;min-width:0"><button class="btn" type="submit">查詢</button></div></form>`;
+  if(wBusy&&!wSel)return top+`<p class="sec-note" style="margin-top:12px">讀取中…</p>`;
+  if(wPanel==="new"&&!wSel)return top+`<form id="w-new" class="card" novalidate style="margin-top:12px"><span class="name" style="font-size:16px">新增儲值會員</span>
+    <label class="f" for="wn-name">客人姓名</label><input class="t" id="wn-name" placeholder="王小美">
+    <label class="f" for="wn-phone">手機號碼</label><input class="t" id="wn-phone" type="tel" inputmode="numeric" placeholder="0912345678">
+    ${msgs}<div class="actions"><button class="btn" type="submit" ${wBusy?"disabled":""}>建立會員卡</button><button class="btn ghost" type="button" data-wclose>取消</button></div></form>`;
+  if(!wSel){if(wList===null){wList=false;findWallets(wQ||null).then(l=>{wList=l;reW()}).catch(e=>{console.warn(e);wList=[];wErr="會員資料讀取失敗，請確認安全規則已更新。";reW()})}
+    return top+msgs+`<h2 class="sec" style="font-size:17px">${wQ?"查詢結果":"最近的會員"}</h2>
+    ${!wList?`<p class="sec-note">讀取中…</p>`:wList.length?`<div class="list">${wList.map(w=>`<button class="card wrow" data-wopen="${w.tk}"><span><b>${esc(w.name)}</b>　<span class="meta">${fmtPhone(w.phone)}</span>${Object.keys(w.gifts||{}).length?`<small class="meta" style="display:block">${Object.entries(w.gifts).map(([n,x])=>`${esc(n)} ${x.n}`).join("、")}</small>`:""}</span><span class="price">${money(w.balance||0)}</span></button>`).join("")}</div>`
+      :`<p class="sec-note">${wQ?"查不到這支號碼的會員，可以按「＋ 新增會員」建立。":"還沒有儲值會員。"}</p>`}`}
+  const w=wSel,gifts=Object.entries(w.gifts||{}),plans=(SHOP.plans||[]).filter(p=>p.on);
+  const P=[["topup","儲值"],["spend","扣款"],["redeem","使用贈品"],["adjust","調整"],["bind","綁定 QR"],["edit","修改資料"]];
+  let panel="";
+  if(wPanel==="topup"){const p=plans.find(x=>x.id===wPlan),cus=wPlan==="custom";
+    panel=`<form id="w-top" class="card" novalidate><p class="meta" style="margin:0">選擇方案</p>
+    <div class="chips">${plans.map(x=>`<button type="button" class="chip" data-wplan="${x.id}" aria-pressed="${wPlan===x.id}">${esc(planName(x))}</button>`).join("")}<button type="button" class="chip" data-wplan="custom" aria-pressed="${cus}">自訂金額</button></div>
+    ${cus?`<div style="display:flex;gap:8px"><div style="flex:1"><label class="f" for="wt-pay">收款金額</label><input class="t" id="wt-pay" type="number" inputmode="numeric" min="1"></div><div style="flex:1"><label class="f" for="wt-bonus">加贈金額</label><input class="t" id="wt-bonus" type="number" inputmode="numeric" min="0" value="0"></div></div>`:""}
+    ${p||cus?`<label class="f" for="wt-pay-m">付款方式</label><select class="t" id="wt-pay-m">${SHOP.pay.map(id=>`<option value="${id}">${payName(id)}</option>`).join("")}</select>
+    <label class="f" for="wt-note">備註（選填）</label><input class="t" id="wt-note">
+    ${p?`<p class="notice">收 ${money(p.pay)}，入帳 ${money(p.pay+p.bonus)}${p.gifts.length?`<br>另外贈送：${p.gifts.map(g=>`${esc(g.name)} ×${g.n}`).join("、")}`:""}<br>儲值後餘額 ${money((w.balance||0)+p.pay+p.bonus)}</p>`:""}
+    ${msgs}<div class="actions"><button class="btn" type="submit" ${wBusy?"disabled":""}>確認儲值</button></div>`:`<p class="sec-note" style="margin-top:10px">${plans.length?"":"還沒有啟用的儲值方案，可以到「店家設定」新增，或用自訂金額。"}</p>`}</form>`}
+  else if(wPanel==="spend")panel=`<form id="w-spend" class="card" novalidate><p class="meta" style="margin:0">目前餘額 ${money(w.balance||0)}</p>
+    <label class="f" for="ws-amt">扣款金額</label><input class="t" id="ws-amt" type="number" inputmode="numeric" min="1">
+    <label class="f" for="ws-item">消費項目</label><input class="t" id="ws-item" list="w-items" placeholder="例：頭皮舒壓洗">${itemsList()}
+    ${msgs}<div class="actions"><button class="btn" type="submit" ${wBusy?"disabled":""}>確認扣款</button></div></form>`;
+  else if(wPanel==="redeem")panel=`<div class="card">${gifts.length?gifts.map(([n,x])=>`<div class="row" style="align-items:center;margin-top:6px"><span>${esc(n)}<small class="meta">　剩 ${x.n} ${unit(x.kind)}</small></span><button class="chip" data-wuse="${esc(n)}">使用 1 ${unit(x.kind)}</button></div>`).join(""):`<p class="sec-note" style="margin:0">這位客人目前沒有贈品。</p>`}
+    ${wUse?`<div class="confirm">確定幫 ${esc(w.name)} 使用「${esc(wUse)}」1 ${unit((w.gifts[wUse]||{}).kind)}嗎？<div class="actions"><button class="btn danger" data-wuse-yes ${wBusy?"disabled":""}>確定使用</button><button class="btn ghost" data-wuse-no>先不要</button></div></div>`:""}${msgs}</div>`;
+  else if(wPanel==="adjust")panel=`<form id="w-adj" class="card" novalidate><p class="sec-note" style="margin:0">輸入錯誤或特殊情況時使用，會留下紀錄。要減少請輸入負數，例如 -500。</p>
+    <label class="f" for="wa-amt">餘額增減</label><input class="t" id="wa-amt" type="number" inputmode="numeric" placeholder="0">
+    <label class="f" for="wa-gift">贈品增減（選填）</label><div class="grow"><input class="t" id="wa-gift" list="w-gifts" placeholder="贈品名稱" style="flex:1;min-width:0"><select class="t" id="wa-kind" style="width:84px"><option value="service">服務</option><option value="product">產品</option></select><input class="t" id="wa-n" type="number" inputmode="numeric" placeholder="0" style="width:64px"></div>
+    <datalist id="w-gifts">${gifts.map(([n])=>`<option value="${esc(n)}">`).join("")}${allItems().map(i=>`<option value="${esc(i.name)}">`).join("")}</datalist>
+    <label class="f" for="wa-note">原因（必填）</label><input class="t" id="wa-note" placeholder="例：儲值金額輸入錯誤">
+    ${msgs}<div class="actions"><button class="btn" type="submit" ${wBusy?"disabled":""}>確認調整</button></div></form>`;
+  else if(wPanel==="bind")panel=`<div class="card" style="text-align:center"><p style="margin:0">請客人用<b>手機相機</b>掃描，會員卡就會存到他的手機。</p>
+    <div class="qrbox"><img data-qr="${esc(cardURL(w.tk))}" alt="綁定 QR code"></div><p class="fine">客人換手機或刪掉了，再掃一次就好。這個 QR code 等同會員卡，請只給本人掃。</p>${msgs}</div>`;
+  else if(wPanel==="edit")panel=`<form id="w-edit" class="card" novalidate>
+    <label class="f" for="we-name">客人姓名</label><input class="t" id="we-name" value="${esc(w.name)}">
+    <label class="f" for="we-phone">手機號碼</label><input class="t" id="we-phone" type="tel" inputmode="numeric" value="${esc(w.phone)}">
+    ${msgs}<div class="actions"><button class="btn" type="submit" ${wBusy?"disabled":""}>儲存</button></div></form>`;
+  return top+`<div class="mcard" style="margin-top:14px"><div class="row"><span class="name">${esc(w.name)}</span><span class="meta" style="margin:0">${fmtPhone(w.phone)}</span></div>
+    <p class="meta" style="margin:10px 0 0">儲值餘額</p><div class="bal">${money(w.balance||0)}</div>${giftsHTML(w)}</div>
+  <div class="chips">${P.map(([k,n])=>`<button class="chip" data-wpanel="${k}" aria-pressed="${wPanel===k}">${n}</button>`).join("")}</div>
+  <div style="margin-top:10px">${panel||msgs}</div>
+  <h2 class="sec" style="font-size:17px">紀錄（永久保留）</h2>${logsHTML(wLogs,true)}
+  <div class="actions"><button class="btn ghost" data-wclose>← 回會員列表</button></div>`}
+
+/* 店家設定：儲值方案 */
+function plansHTML(){const ps=SHOP.plans||[];
+  return `<h2 class="sec">儲值方案</h2><p class="sec-note">在「儲值會員」幫客人儲值時直接選。修改只影響之後的儲值，已經入帳的不會變。停用的方案客人和店家都看不到。</p>
+  <div class="list">${ps.map((p,i)=>`<div class="card ${p.on?"":"dim"}" data-pi="${i}">
+    <div class="row" style="align-items:center"><span class="name" style="font-size:15px">${esc(planName(p))}</span><button class="chip" data-pon="${i}" aria-pressed="${p.on}">${p.on?"使用中":"已停用"}</button></div>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label class="f">收款金額</label><input class="t" type="number" inputmode="numeric" min="1" data-pf="pay" value="${p.pay}"></div><div style="flex:1"><label class="f">加贈金額</label><input class="t" type="number" inputmode="numeric" min="0" data-pf="bonus" value="${p.bonus}"></div></div>
+    <label class="f">贈送服務或產品</label>
+    ${p.gifts.map((g,j)=>`<div class="grow"><input class="t" data-gf="name" data-gj="${j}" value="${esc(g.name)}" list="w-items" placeholder="名稱" style="flex:1;min-width:0"><select class="t" data-gf="kind" data-gj="${j}" style="width:84px"><option value="service" ${g.kind!=="product"?"selected":""}>服務</option><option value="product" ${g.kind==="product"?"selected":""}>產品</option></select><input class="t" type="number" inputmode="numeric" min="1" data-gf="n" data-gj="${j}" value="${g.n}" style="width:64px"><button class="chip" data-gdel="${i}:${j}" aria-label="移除這個贈品">✕</button></div>`).join("")||`<p class="sec-note" style="margin:0">沒有贈品。</p>`}
+    <div class="actions"><button class="chip" data-gadd="${i}">＋ 贈品</button><button class="chip" data-pdel="${i}">刪除方案</button></div></div>`).join("")}</div>
+  <div class="actions"><button class="btn ghost" data-padd>＋ 新增方案</button></div>${itemsList()}`}
+const int=(v,min,max)=>{const n=Math.round(Number(v));return Number.isFinite(n)?Math.max(min,Math.min(max,n)):min};
+$("#v-admin").addEventListener("change",e=>{const c=e.target.closest("[data-pi]");if(!c||!(e.target.dataset.pf||e.target.dataset.gf))return;
+  const p=SHOP.plans[+c.dataset.pi];
+  if(e.target.dataset.pf)p[e.target.dataset.pf]=int(e.target.value,e.target.dataset.pf==="pay"?1:0,1e6);
+  else{const g=p.gifts[+e.target.dataset.gj],f=e.target.dataset.gf;g[f]=f==="n"?int(e.target.value,1,99):f==="name"?e.target.value.trim().slice(0,30):e.target.value}
+  saveSettings();reAdmin()});
+const reAdmin=()=>{const y=window.scrollY;renderAdmin();window.scrollTo(0,y)};
+$("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;const d=t.dataset;
+  if(d.padd!==undefined){SHOP.plans.push({id:"p"+Date.now().toString(36),pay:3000,bonus:0,gifts:[],on:true});saveSettings();reAdmin()}
+  else if(d.pon){const p=SHOP.plans[+d.pon];p.on=!p.on;saveSettings();reAdmin()}
+  else if(d.pdel){if(t.dataset.sure){SHOP.plans.splice(+d.pdel,1);saveSettings();reAdmin()}else{t.dataset.sure="1";t.textContent="再按一次確認刪除"}}
+  else if(d.gadd){SHOP.plans[+d.gadd].gifts.push({name:"",kind:"service",n:1});saveSettings();reAdmin()}
+  else if(d.gdel){const [i,j]=d.gdel.split(":").map(Number);SHOP.plans[i].gifts.splice(j,1);saveSettings();reAdmin()}
+  else if(d.wscan!==undefined)openScan();
+  else if(d.wnew!==undefined){wSel=null;wPanel="new";wReset();reW()}
+  else if(d.wclose!==undefined){wSel=null;wPanel=null;wList=null;wReset();reW()}
+  else if(d.wopen)openWallet(d.wopen);
+  else if(d.wpanel){wPanel=wPanel===d.wpanel?null:d.wpanel;wPlan=null;wReset();reW()}
+  else if(d.wplan){wPlan=d.wplan;wErr="";reW()}
+  else if(d.wuse){wUse=d.wuse;wErr=wMsg="";reW()}
+  else if(d.wuseNo!==undefined){wUse=null;reW()}
+  else if(d.wuseYes!==undefined){const n=wUse,k=(wSel.gifts[n]||{}).kind;wRun({type:"redeem",gifts:[{name:n,kind:k,n:-1}],note:""},`已使用「${esc(n)}」1 ${unit(k)}。`)}});
+$("#v-admin").addEventListener("submit",async e=>{const id=e.target.id;if(!id.startsWith("w-"))return;e.preventDefault();
+  const fail=m=>{wErr=m;wMsg="";const keep=[...e.target.querySelectorAll("input,select")].map(i=>[i.id,i.value]);reW();keep.forEach(([k,v])=>{const i=k&&document.getElementById(k);if(i)i.value=v})};
+  if(id==="w-q"){wQ=$("#wq").value.replace(/\D/g,"");wSel=null;wPanel=null;wList=null;wReset();reW();return}
+  if(id==="w-new"){const name=$("#wn-name").value.trim().slice(0,20),phone=$("#wn-phone").value.replace(/\D/g,"");
+    if(!name)return fail("請填寫客人姓名。");if(!/^09\d{8}$/.test(phone))return fail("手機號碼請輸入 09 開頭的 10 位數字。");
+    wBusy=true;reW();try{const w=await createWallet(name,phone);wBusy=false;await openWallet(w.tk,"bind");wMsg=`已建立 ${esc(name)} 的會員卡。請客人掃描上面的 QR code 存到手機，再按「儲值」。`;reW()}
+    catch(er){console.warn(er);wBusy=false;fail(errMsg(er))}return}
+  if(id==="w-top"){const p=(SHOP.plans||[]).find(x=>x.id===wPlan),pay=$("#wt-pay-m").value,note=$("#wt-note").value.trim().slice(0,60);
+    let paid,bonus,gifts=[],label;
+    if(p){paid=p.pay;bonus=p.bonus;gifts=p.gifts.filter(g=>g.name).map(g=>({name:g.name,kind:g.kind,n:g.n}));label=planName(p)}
+    else{paid=Math.round(Number($("#wt-pay").value));bonus=Math.round(Number($("#wt-bonus").value)||0);
+      if(!(paid>0&&paid<=1e6))return fail("請輸入收款金額。");if(!(bonus>=0&&bonus<=1e6))return fail("加贈金額不正確。");label=`自訂：收 ${money(paid)}${bonus?` 送 ${money(bonus)}`:""}`}
+    return wRun({type:"topup",amount:paid+bonus,gifts,paid,pay,note:label+(note?`（${note}）`:"")},`儲值完成，入帳 ${money(paid+bonus)}${gifts.length?"，贈品已加入":""}。`)}
+  if(id==="w-spend"){const amt=Math.round(Number($("#ws-amt").value)),item=$("#ws-item").value.trim().slice(0,60);
+    if(!(amt>0))return fail("請輸入扣款金額。");if(!item)return fail("請填寫消費項目。");if(amt>(wSel.balance||0))return fail(`餘額不足，目前只有 ${money(wSel.balance||0)}。`);
+    return wRun({type:"spend",amount:-amt,note:item},`已扣款 ${money(amt)}。`)}
+  if(id==="w-adj"){const amt=Math.round(Number($("#wa-amt").value)||0),gn=$("#wa-gift").value.trim().slice(0,30),n=Math.round(Number($("#wa-n").value)||0),note=$("#wa-note").value.trim().slice(0,60);
+    if(!amt&&!(gn&&n))return fail("請輸入要調整的金額，或贈品名稱和數量。");if(gn&&!n)return fail("請輸入贈品要增減的數量。");if(!note)return fail("請填寫調整原因。");
+    const kind=(wSel.gifts[gn]||{}).kind||$("#wa-kind").value;
+    return wRun({type:"adjust",amount:amt,gifts:gn&&n?[{name:gn,kind,n}]:[],note:"原因："+note},"調整完成。")}
+  if(id==="w-edit"){const name=$("#we-name").value.trim().slice(0,20),phone=$("#we-phone").value.replace(/\D/g,"");
+    if(!name)return fail("請填寫客人姓名。");if(!/^09\d{8}$/.test(phone))return fail("手機號碼請輸入 09 開頭的 10 位數字。");
+    const ch=[name!==wSel.name?`姓名 ${wSel.name} → ${name}`:"",phone!==wSel.phone?`手機 ${wSel.phone} → ${phone}`:""].filter(Boolean);
+    if(!ch.length){wPanel=null;return reW()}
+    if(phone!==wSel.phone){try{if((await findWallets(phone)).length)return fail("這支手機號碼已經是另一位會員了。")}catch(er){return fail(errMsg(er))}}
+    return wRun({type:"edit",patch:{name,phone},note:ch.join("、")},"資料已更新。")}
+});
+
+/* 相機掃描會員條碼：支援的瀏覽器用內建 BarcodeDetector，其他（例如 iPhone）載入 jsQR */
+let scanning=null;
+async function openScan(){if(scanning)return;
+  const ov=document.createElement("div");ov.id="scan";ov.innerHTML=`<div class="scan-in"><video playsinline muted></video><p>把客人的會員條碼對準框框</p><button class="btn ghost" type="button">取消</button></div>`;document.body.appendChild(ov);
+  let stream=null,stop=false;const close=()=>{stop=true;scanning=null;if(stream)stream.getTracks().forEach(t=>t.stop());ov.remove()};scanning=close;
+  ov.querySelector("button").onclick=close;
+  const fail=m=>{close();wErr=m;wMsg="";reW()};
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false})}catch(e){return fail("無法開啟相機，請允許這個網站使用相機，或改用手機號碼查詢。")}
+  if(stop){stream.getTracks().forEach(t=>t.stop());return}
+  const v=ov.querySelector("video");v.srcObject=stream;try{await v.play()}catch(e){}
+  let det=null,jsqr=null;
+  if("BarcodeDetector" in window){try{det=new BarcodeDetector({formats:["qr_code"]})}catch(e){}}
+  if(!det){try{jsqr=await lib(JSQR_LIB,"jsQR")}catch(e){return fail("掃描元件載入失敗，請檢查網路，或改用手機號碼查詢。")}}
+  const cv=document.createElement("canvas"),g=cv.getContext("2d",{willReadFrequently:true});
+  const tick=async()=>{if(stop)return;let txt=null;
+    try{if(v.readyState>=2){if(det){const r=await det.detect(v);txt=r[0]&&r[0].rawValue}
+      else{const k=Math.min(1,640/Math.max(v.videoWidth,v.videoHeight));cv.width=v.videoWidth*k;cv.height=v.videoHeight*k;g.drawImage(v,0,0,cv.width,cv.height);const r=jsqr(g.getImageData(0,0,cv.width,cv.height).data,cv.width,cv.height,{inversionAttempts:"dontInvert"});txt=r&&r.data}}}catch(e){}
+    if(stop)return;
+    if(txt){const tk=parseTk(txt);if(tk){close();openWallet(tk);return}ov.querySelector("p").textContent="這不是伶髮藝的會員條碼，請再試一次"}
+    setTimeout(tick,200)};
+  tick()}
+
 /* ===== 分頁與底部列 ===== */
 function go(v){view=v;
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===v));
-  for(const k of ["menu","book","mine","member","admin"])$("#v-"+k).hidden=k!==v;
+  for(const k of ["menu","book","mine","member","card","admin"])$("#v-"+k).hidden=k!==v;
   if(v==="book")renderBook();
   if(v==="admin")renderAdmin();
   if(v==="member"){renderMember();if(CLOUD&&mePhone&&!getMember(mePhone))fetchMember(mePhone).then(()=>renderMember()).catch(er=>console.warn(er))}
   if(v==="mine"&&!$("#q"))renderMine();
+  if(v==="card"){renderCard();if(myCard)loadCard()}
   updateBar();window.scrollTo(0,0);
 }
 document.querySelector("nav.tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(b)go(b.dataset.view)});
@@ -733,5 +993,6 @@ $("#bar-next").addEventListener("click",()=>{lastBooking=null;go("book")});
 /* 範例：預設選好一個方案，讓第一次打開就看得到底部金額列 */
 sel.wash="w1200";
 if(!F.member)$("#tab-member").hidden=true;
-renderMenu();renderMine();renderMember();updateBar();startCloud();
+$("#tab-card").hidden=!myCard;
+renderMenu();renderMine();renderMember();updateBar();startCloud();checkHash();
 </script>

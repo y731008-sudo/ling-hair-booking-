@@ -61,6 +61,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 儲值會員卡：文件編號是隨機卡號，客人知道卡號才讀得到自己的卡；只有店家能開卡、儲值、扣款，不能刪除
+    match /wallets/{card} {
+      allow get: if true;
+      allow list, create, update: if isAdmin();
+      allow delete: if false;
+      // 儲值、扣款、使用贈品、調整紀錄：只能新增，任何人（包括店家）都不能修改或刪除
+      match /logs/{id} {
+        allow read: if true;
+        allow create: if isAdmin();
+        allow update, delete: if false;
+      }
+    }
+
     // 會員：文件編號是手機號碼雜湊；客人只能新建 0 點的會員，蓋點和兌換只有店家能做
     match /members/{key} {
       allow get: if true;
