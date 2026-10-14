@@ -74,6 +74,14 @@ service cloud.firestore {
       }
     }
 
+    // 燙染紀錄卡和每次服務紀錄：只有店家能看、能寫
+    match /cards/{id} {
+      allow read, write: if isAdmin();
+      match /visits/{v} {
+        allow read, write: if isAdmin();
+      }
+    }
+
     // 會員：文件編號是手機號碼雜湊；客人只能新建 0 點的會員，蓋點和兌換只有店家能做
     match /members/{key} {
       allow get: if true;

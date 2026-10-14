@@ -142,6 +142,15 @@ select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
 #scan{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:20;display:grid;place-items:center;padding:16px}
 .scan-in{width:100%;max-width:420px;text-align:center;color:#fff}
 .scan-in video{width:100%;border-radius:14px;background:#000;outline:3px solid var(--gold);outline-offset:-3px}
+/* 燙染紀錄卡 */
+.chip.opt{position:relative;display:inline-flex;align-items:center}
+.chip.opt input{position:absolute;opacity:0;pointer-events:none}
+.chip.opt:has(input:checked){background:var(--espresso);color:var(--gold-soft);border-color:var(--espresso)}
+.chip.opt:has(input:focus-visible){outline:2px solid var(--gold);outline-offset:2px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.two>*{min-width:0}
+h3.sub{font-family:var(--f-display);font-size:16px;color:var(--gold);margin:18px 0 4px;letter-spacing:.1em}
+.vphoto{display:block;max-width:100%;max-height:320px;border-radius:10px;margin-top:8px}
 /* 店家專用網址（#admin）：只顯示後台 */
 body.admin-mode nav.tabs,body.admin-mode [data-go="menu"],body.admin-mode #bar{display:none!important}
 @media (prefers-reduced-motion:no-preference){.card,.chip,.date{transition:background .15s,border-color .15s}}
@@ -582,12 +591,14 @@ function renderAdmin(){
   const dates=SHOP.closedDates.slice().sort();
   const booked=d=>load().filter(b=>isActive(b)&&b.date===d).length;
   const ax=adminPhone&&getMember(adminPhone);
-  const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],...(F.member?[["member","會員集點"]]:[]),["wallet","儲值會員"],["set","店家設定"]];
+  const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],...(F.member?[["member","會員集點"]]:[]),["wallet","儲值會員"],["cards","燙染紀錄卡"],["export","匯出紀錄"],["set","店家設定"]];
   const sub=`<div class="subtabs">${tabs.map(([k,n])=>`<button class="chip" data-atab="${k}" aria-pressed="${adminTab===k}">${n}</button>`).join("")}${CLOUD?`<button class="chip" data-signout>登出</button>`:""}</div>`;
   let body;
   if(adminTab==="cal")body=calHTML();
   else if(adminTab==="phone")body=phoneHTML();
   else if(adminTab==="wallet")body=walletHTML();
+  else if(adminTab==="cards")body=cardsHTML();
+  else if(adminTab==="export")body=exportHTML();
   else if(adminTab==="member")body=`${F.member?`<h2 class="sec">會員集點</h2><p class="sec-note">客人結帳時輸入手機號碼，幫他蓋點或兌換贈品。</p>
   <form id="af" novalidate><div style="display:flex;gap:8px"><input class="t" id="a-phone" type="tel" inputmode="numeric" placeholder="會員手機號碼" value="${adminPhone||""}" style="flex:1;min-width:0"><button class="btn" type="submit">查詢</button></div></form>
   ${adminPhone&&!ax?`<p class="err">查不到這支號碼的會員。</p>`:""}
@@ -680,7 +691,7 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.admrmNo!==undefined){admRm=null;re();return}
   if(t.dataset.admrmYes){const em=t.dataset.admrmYes;t.disabled=true;
     fdb.collection("admins").doc(em).delete().then(()=>{admins=admins.filter(a=>a.email!==em);admMsg="已移除。"}).catch(er=>{console.warn(er);admErr="移除失敗，請檢查網路。"}).finally(()=>{admRm=null;re()});return}
-  if(t.dataset.atab){if(t.dataset.atab==="wallet"&&adminTab!=="wallet"){wList=null;wPanel=wSel?wPanel:null}adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
+  if(t.dataset.atab){if(t.dataset.atab==="wallet"&&adminTab!=="wallet"){wList=null;wPanel=wSel?wPanel:null}if(t.dataset.atab==="cards"&&adminTab!=="cards"){cList=null;cMode=null;cMsg=cErr=""}adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
   if(t.dataset.cmon){calMonth+=+t.dataset.cmon;re();return}
   if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
   if(t.dataset.blk){const a=(SHOP.blocked=SHOP.blocked||{})[calDay]=(SHOP.blocked[calDay]||[]).slice(),i=a.indexOf(t.dataset.blk);i<0?a.push(t.dataset.blk):a.splice(i,1);a.sort();saveSettings();re();return}
@@ -700,7 +711,7 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.wd){const i=+t.dataset.wd,a=SHOP.closedWeekdays;a.includes(i)?a.splice(a.indexOf(i),1):a.push(i);saveSettings();renderAdmin();renderMenu()}
   else if(t.dataset.rmdate){SHOP.closedDates=SHOP.closedDates.filter(d=>d!==t.dataset.rmdate);saveSettings();renderAdmin()}
 });
-$("#v-admin").addEventListener("submit",async e=>{if(e.target.id.startsWith("w-"))return;e.preventDefault();
+$("#v-admin").addEventListener("submit",async e=>{if(/^[wcx]-/.test(e.target.id))return;e.preventDefault();
   if(e.target.id==="lg"){adminLoginErr="";try{await fauth.signInWithEmailAndPassword(loginId($("#lg-email").value),$("#lg-pw").value)}catch(er){adminLoginErr="帳號或密碼不正確。";renderAdmin()}return}
   if(e.target.id==="pf"){phoneMsg=phoneErr="";
     const name=$("#p-name").value.trim(),phone=$("#p-phone").value.replace(/\D/g,""),date=$("#p-date").value,time=$("#p-time").value,note=$("#p-note").value.trim();
@@ -771,9 +782,9 @@ async function getWallet(tk){if(!tk)return null;
   const d=await fdb.collection("wallets").doc(tk).get();return d.exists?{tk,...d.data()}:null}
 async function getLogs(tk){if(!CLOUD)return ((loadW()[tk]||{}).logs||[]).slice(0,200);
   const q=await fdb.collection("wallets").doc(tk).collection("logs").orderBy("t","desc").limit(200).get();return q.docs.map(d=>d.data())}
-async function findWallets(phone){
-  if(!CLOUD)return Object.entries(loadW()).filter(([,w])=>!phone||w.phone===phone).map(([tk,{logs,...w}])=>({tk,...w})).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,50);
-  const q=phone?await fdb.collection("wallets").where("phone","==",phone).get():await fdb.collection("wallets").orderBy("updatedAt","desc").limit(50).get();
+async function findWallets(phone,all){
+  if(!CLOUD)return Object.entries(loadW()).filter(([,w])=>!phone||w.phone===phone).map(([tk,{logs,...w}])=>({tk,...w})).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,all?1e9:50);
+  const q=phone?await fdb.collection("wallets").where("phone","==",phone).get():all?await fdb.collection("wallets").get():await fdb.collection("wallets").orderBy("updatedAt","desc").limit(50).get();
   return q.docs.map(d=>({tk:d.id,...d.data()}))}
 async function createWallet(name,phone){if((await findWallets(phone)).length)throw userErr("這支手機號碼已經有會員卡了，請直接查詢。");
   const tk=newToken(),t=new Date().toISOString(),by=await opName(),w={name,phone,balance:0,gifts:{},createdAt:t,updatedAt:t},log={t,type:"open",amount:0,gifts:[],balance:0,note:"",by};
@@ -969,6 +980,170 @@ async function openScan(){if(scanning)return;
     if(txt){const tk=parseTk(txt);if(tk){close();openWallet(tk);return}ov.querySelector("p").textContent="這不是伶髮藝的會員條碼，請再試一次"}
     setTimeout(tick,200)};
   tick()}
+
+/* ===== 燙染紀錄卡（只有店家看得到） =====
+   cards/{編號}：客人基本資料＋髮質分析；cards/{編號}/visits：每次服務紀錄（含髮型照片） */
+const HAIR=[["body","體質",["正常","敏感"]],["color","髮本色",["黑","黑褐","褐","棕","淺棕"]],["thick","粗細狀",["粗","普通","細"]],["soft","硬軟度",["硬","普通","軟"]],
+  ["elastic","彈力性",["有","普通","無"]],["dry","乾燥性",["乾性","普通","油性"]],["natural","自然髮性",["強","普通","無"]],["amount","髮量",["多","普通","少"]],
+  ["perm","冷燙髮性",["易燙","普通","難燙"]],["absorb","藥劑吸收性",["強","普通","弱"]]];
+const SIDE=["冷燙","染髮","化粧品"];
+const CKEY="salon-cards-v1";let memC={};
+function loadC(){try{const s=localStorage.getItem(CKEY);return s?JSON.parse(s):memC}catch(e){return memC}}
+function saveC(c){memC=c;try{localStorage.setItem(CKEY,JSON.stringify(c))}catch(e){}}
+async function listCards(){if(!CLOUD)return Object.entries(loadC()).map(([id,{visits,...c}])=>({id,...c,nv:(visits||[]).length}));
+  const q=await fdb.collection("cards").orderBy("updatedAt","desc").limit(300).get();return q.docs.map(d=>({id:d.id,...d.data()}))}
+async function getCard(id){if(!CLOUD){const c=loadC()[id];if(!c)return null;const {visits,...r}=c;return {id,...r}}
+  const d=await fdb.collection("cards").doc(id).get();return d.exists?{id,...d.data()}:null}
+async function saveCard(id,data){const t=new Date().toISOString(),by=await opName(),v={...data,updatedAt:t,updatedBy:by};
+  if(!CLOUD){const all=loadC();if(!id){id="c"+Date.now().toString(36);all[id]={...v,createdAt:t,visits:[]}}else Object.assign(all[id],v);saveC(all);return id}
+  if(!id){const ref=fdb.collection("cards").doc();await ref.set({...v,createdAt:t});return ref.id}
+  await fdb.collection("cards").doc(id).update(v);return id}
+async function getVisits(id){if(!CLOUD)return ((loadC()[id]||{}).visits||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
+  const q=await fdb.collection("cards").doc(id).collection("visits").orderBy("date","desc").get();return q.docs.map(d=>({vid:d.id,...d.data()}))}
+async function saveVisit(id,vid,data){const t=new Date().toISOString(),by=await opName(),v={...data,updatedAt:t,updatedBy:by};
+  if(!CLOUD){const all=loadC(),l=all[id].visits;if(vid)Object.assign(l.find(x=>x.vid===vid),v);else l.push({vid:"v"+Date.now().toString(36),...v,createdAt:t,by});all[id].updatedAt=t;saveC(all);return}
+  const ref=fdb.collection("cards").doc(id),b=fdb.batch();
+  if(vid)b.update(ref.collection("visits").doc(vid),v);else b.set(ref.collection("visits").doc(),{...v,createdAt:t,by});
+  b.update(ref,{updatedAt:t});await b.commit()}
+async function delVisit(id,vid){if(!CLOUD){const all=loadC();all[id].visits=all[id].visits.filter(x=>x.vid!==vid);saveC(all);return}
+  await fdb.collection("cards").doc(id).collection("visits").doc(vid).delete()}
+/* 照片縮小成 1000px 內的 JPEG，存在紀錄裡（Firestore 單筆上限 1MB） */
+function shrinkPhoto(file){return new Promise((ok,no)=>{const img=new Image(),url=URL.createObjectURL(file);
+  img.onload=()=>{let side=1000,q=.75,out="";do{const k=Math.min(1,side/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+    const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);out=c.toDataURL("image/jpeg",q);side-=200;q-=.1}while(out.length>700000&&side>300);
+    URL.revokeObjectURL(url);ok(out)};img.onerror=()=>{URL.revokeObjectURL(url);no(new Error("bad image"))};img.src=url})}
+
+let cList=null,cSel=null,cVisits=null,cMode=null,cEditV=null,cQ="",cMsg="",cErr="",cBusy=false,cPhoto=undefined,cDelV=null,cWallet=null;
+const reC=()=>{if(view==="admin"&&adminTab==="cards"){const y=window.scrollY;renderAdmin();window.scrollTo(0,y)}};
+const radios=(name,opts,val)=>`<div class="chips">${opts.map(o=>`<label class="chip opt"><input type="radio" name="${name}" value="${esc(o)}" ${val===o?"checked":""}>${esc(o)}</label>`).join("")}</div>`;
+const vTxt=v=>[v.len&&`${esc(v.len)}髮`,v.cut==="有"&&"剪髮",v.damage&&`損傷：${esc(v.damage)}`,v.special==="有"&&"特別保養",v.pre&&"燙前保養",v.post&&"燙後保養",v.dye&&`染膏 ${esc(v.dye)}`,(v.t1||v.t2)&&`時間 ${[v.t1,v.t2].filter(Boolean).map(x=>esc(x)+"分").join("／")}`].filter(Boolean).join("・");
+async function openCard(id){cSel=null;cVisits=null;cMode=null;cWallet=null;cMsg=cErr="";cBusy=true;reC();
+  try{cSel=await getCard(id);if(!cSel)cErr="找不到這張紀錄卡。";else{cVisits=await getVisits(id);findWallets(cSel.phone).then(l=>{cWallet=l[0]||null;reC()}).catch(()=>{})}}
+  catch(e){console.warn(e);cErr="讀取失敗，請確認安全規則已更新。"}cBusy=false;reC()}
+function cardsHTML(){const msgs=`${cErr?`<p class="err">${cErr}</p>`:""}${cMsg?`<p class="notice" style="color:var(--ok)">${cMsg}</p>`:""}`;
+  if(cMode==="info"||(cMode==="new"&&!cSel))return cardInfoForm(cMode==="new"?{}:cSel);
+  if(cSel&&cMode==="visit")return visitForm();
+  if(!cSel){if(cList===null){cList=false;listCards().then(l=>{cList=l;reC()}).catch(e=>{console.warn(e);cList=[];cErr="紀錄卡讀取失敗，請確認安全規則已更新。";reC()})}
+    const q=cQ.replace(/[\s-]/g,""),l=(cList||[]).filter(c=>!q||(c.phone||"").includes(q)||(c.tel||"").includes(q)||(c.name||"").includes(cQ.trim())||(c.no||"")===cQ.trim());
+    return `<h2 class="sec">燙染紀錄卡</h2><p class="sec-note">只有店家看得到。可用姓名、手機或貴賓卡號搜尋。</p>
+    <div class="actions" style="margin-top:4px"><button class="btn" data-cnew>＋ 新增紀錄卡</button></div>
+    <form id="c-q" novalidate style="margin-top:12px"><div style="display:flex;gap:8px"><input class="t" id="cq" placeholder="姓名、手機或卡號" value="${esc(cQ)}" style="flex:1;min-width:0"><button class="btn" type="submit">搜尋</button></div></form>${msgs}
+    <div class="list" style="margin-top:12px">${!cList?`<p class="sec-note">讀取中…</p>`:l.length?l.map(c=>`<button class="card wrow" data-copen="${c.id}"><span><b>${esc(c.name||"（未填姓名）")}</b>　<span class="meta">${c.phone?fmtPhone(c.phone):""}</span>${c.no?`<small class="meta" style="display:block">卡號 ${esc(c.no)}</small>`:""}</span><span class="meta">${fmtT(c.updatedAt)}</span></button>`).join(""):`<p class="sec-note">${q?"找不到符合的紀錄卡。":"還沒有紀錄卡。"}</p>`}</div>`}
+  const c=cSel,h=c.hair||{};
+  const hairRows=HAIR.filter(([k])=>h[k]).map(([k,n])=>`<li><span>${n}</span><span>${esc(h[k])}</span></li>`).join("")+(h.side&&h.side.length?`<li><span>副作用</span><span>${h.side.map(esc).join("、")}</span></li>`:"")+(h.liquid?`<li><span>指定藥水</span><span>${esc(h.liquid)}</span></li>`:"");
+  return `<h2 class="sec">燙染紀錄卡</h2>${msgs}
+  <div class="card"><div class="row"><span class="name">${esc(c.name||"（未填姓名）")}</span><button class="chip" data-cinfo>修改資料</button></div>
+    <p class="meta">${[c.no&&"卡號 "+esc(c.no),c.gender&&esc(c.gender),c.phone&&fmtPhone(c.phone),c.tel&&"電話 "+esc(c.tel),c.birthday&&"生日 "+esc(c.birthday)].filter(Boolean).join("・")}</p>${c.address?`<p class="meta">${esc(c.address)}</p>`:""}
+    ${cWallet?`<p class="meta">儲值餘額 ${money(cWallet.balance||0)}　<button class="chip" data-cwallet="${cWallet.tk}">查看儲值</button></p>`:""}
+    <h3 class="sub">髮質分析</h3>${hairRows?`<ul class="sum">${hairRows}</ul>`:`<p class="sec-note" style="margin:0">尚未填寫，按「修改資料」填寫。</p>`}</div>
+  <div class="actions"><button class="btn" data-cvisit>＋ 新增服務紀錄</button></div>
+  <h2 class="sec" style="font-size:17px">服務紀錄</h2>
+  <div class="list">${!cVisits?`<p class="sec-note">讀取中…</p>`:cVisits.length?cVisits.map(v=>`<div class="card"><div class="row"><span class="name" style="font-size:16px">${fmtDate(v.date)}</span><span class="price" style="font-size:16px">${v.amount?money(v.amount):""}</span></div>
+    <p class="meta">${v.designer?`設計師 ${esc(v.designer)}　`:""}${vTxt(v)}</p>${v.note?`<p class="meta">注意事項：${esc(v.note)}</p>`:""}${v.call?`<p class="meta">電話訪談：${esc(v.call)}</p>`:""}
+    ${v.photo?`<img class="vphoto" src="${v.photo}" alt="髮型照片">`:""}
+    <p class="fine">由 ${esc(v.by||"")} 建立${v.updatedBy&&v.updatedAt!==v.createdAt?`，${esc(v.updatedBy)} 於 ${fmtDT(v.updatedAt)} 修改`:""}</p>
+    ${cDelV===v.vid?`<div class="confirm">確定刪除這筆服務紀錄？刪除後無法復原。<div class="actions"><button class="btn danger" data-cdelyes="${v.vid}">確定刪除</button><button class="btn ghost" data-cdelno>先不要</button></div></div>`
+      :`<div class="actions"><button class="chip" data-cedit="${v.vid}">編輯</button><button class="chip" data-cdel="${v.vid}">刪除</button></div>`}</div>`).join(""):`<p class="sec-note">還沒有服務紀錄。</p>`}</div>
+  <div class="actions"><button class="btn ghost" data-cclose>← 回紀錄卡列表</button></div>`}
+function cardInfoForm(c){const h=c.hair||{},side=h.side||[];
+  return `<h2 class="sec">${c.id?"修改紀錄卡":"新增紀錄卡"}</h2><form id="c-info" class="card" novalidate>
+  <h3 class="sub" style="margin-top:0">客人基本資料</h3>
+  <div class="two"><div><label class="f" for="ci-name">姓名</label><input class="t" id="ci-name" value="${esc(c.name||"")}"></div><div><label class="f" for="ci-no">貴賓卡號</label><input class="t" id="ci-no" value="${esc(c.no||"")}"></div></div>
+  <label class="f">性別</label>${radios("ci-gender",["女","男"],c.gender)}
+  <div class="two"><div><label class="f" for="ci-phone">行動電話</label><input class="t" id="ci-phone" type="tel" inputmode="numeric" placeholder="09xxxxxxxx" value="${esc(c.phone||"")}"></div><div><label class="f" for="ci-tel">市話</label><input class="t" id="ci-tel" type="tel" value="${esc(c.tel||"")}"></div></div>
+  <label class="f" for="ci-bd">生日</label><input class="t" id="ci-bd" type="date" value="${esc(c.birthday||"")}">
+  <label class="f" for="ci-addr">地址</label><input class="t" id="ci-addr" value="${esc(c.address||"")}">
+  <h3 class="sub">髮質分析</h3>
+  ${HAIR.map(([k,n,o])=>`<label class="f">${n}</label>${radios("ch-"+k,o,h[k])}`).join("")}
+  <label class="f">副作用（可複選）</label><div class="chips">${SIDE.map(o=>`<label class="chip opt"><input type="checkbox" name="ch-side" value="${o}" ${side.includes(o)?"checked":""}>${o}</label>`).join("")}</div>
+  <label class="f" for="ch-liquid">指定藥水</label><input class="t" id="ch-liquid" value="${esc(h.liquid||"")}">
+  ${cErr?`<p class="err">${cErr}</p>`:""}
+  <div class="actions"><button class="btn" type="submit" ${cBusy?"disabled":""}>${cBusy?"儲存中…":"儲存"}</button><button class="btn ghost" type="button" data-ccancel>取消</button></div></form>`}
+function visitForm(){const v=cEditV?cVisits.find(x=>x.vid===cEditV)||{}:{date:ymd(new Date())};const ph=cPhoto!==undefined?cPhoto:v.photo;
+  return `<h2 class="sec">${cEditV?"編輯服務紀錄":"新增服務紀錄"}</h2><p class="sec-note">${esc(cSel.name||"")}</p><form id="c-visit" class="card" novalidate>
+  <div class="two"><div><label class="f" for="cv-date">日期</label><input class="t" id="cv-date" type="date" value="${esc(v.date||"")}"></div><div><label class="f" for="cv-des">設計師</label><input class="t" id="cv-des" value="${esc(v.designer||"")}" list="cv-staff"></div></div>
+  <datalist id="cv-staff">${(admins||[]).map(a=>a.name?`<option value="${esc(a.name)}">`:"").join("")}</datalist>
+  <label class="f">長短</label>${radios("cv-len",["長","普通","短"],v.len)}
+  <label class="f" for="cv-amt">消費金額</label><input class="t" id="cv-amt" type="number" inputmode="numeric" min="0" value="${v.amount||""}">
+  <div class="two"><div><label class="f">剪髮</label>${radios("cv-cut",["有","無"],v.cut)}</div><div><label class="f">特別保養</label>${radios("cv-sp",["有","無"],v.special)}</div></div>
+  <label class="f">損傷</label>${radios("cv-dmg",["全體","毛尾","分叉","好"],v.damage)}
+  <label class="f">時間（分鐘）</label><div class="two"><input class="t" id="cv-t1" inputmode="numeric" placeholder="1." value="${esc(v.t1||"")}"><input class="t" id="cv-t2" inputmode="numeric" placeholder="2." value="${esc(v.t2||"")}"></div>
+  <div class="chips" style="margin-top:14px"><label class="chip opt"><input type="checkbox" id="cv-pre" ${v.pre?"checked":""}>燙前保養</label><label class="chip opt"><input type="checkbox" id="cv-post" ${v.post?"checked":""}>燙後保養</label></div>
+  <label class="f" for="cv-dye">染膏號碼</label><input class="t" id="cv-dye" value="${esc(v.dye||"")}">
+  <label class="f" for="cv-note">注意事項</label><textarea class="t" id="cv-note">${esc(v.note||"")}</textarea>
+  <label class="f" for="cv-call">電話訪談</label><textarea class="t" id="cv-call">${esc(v.call||"")}</textarea>
+  <label class="f">髮型照片</label>${ph?`<img class="vphoto" src="${ph}" alt="髮型照片"><div class="actions"><button class="chip" type="button" data-cphrm>移除照片</button></div>`:""}
+  <label class="upl" for="cv-photo" style="display:inline-block;margin-top:8px">${ph?"換一張":"📷 拍照或選照片"}<input type="file" accept="image/*" id="cv-photo"></label>
+  ${cErr?`<p class="err">${cErr}</p>`:""}
+  <div class="actions"><button class="btn" type="submit" ${cBusy?"disabled":""}>${cBusy?"儲存中…":"儲存"}</button><button class="btn ghost" type="button" data-ccancel>取消</button></div></form>`}
+/* 重畫畫面時保留表單已輸入的內容 */
+function keepFormC(fn){const f=$("#v-admin form"),vals=f?[...f.elements].filter(e=>e.id||e.name).map(e=>[e.id,e.name,e.value,e.checked,e.type]):[];fn();
+  const g=$("#v-admin form");if(!g)return;vals.forEach(([id,name,val,chk,type])=>{if(type==="file"||type==="submit"||type==="button")return;
+    const e=id?document.getElementById(id):g.querySelector(`[name="${name}"][value="${CSS.escape(val)}"]`);if(!e)return;if(type==="radio"||type==="checkbox")e.checked=chk;else e.value=val})}
+const radioVal=n=>{const e=$(`#v-admin input[name="${n}"]:checked`);return e?e.value:""};
+$("#v-admin").addEventListener("change",async e=>{if(e.target.id!=="cv-photo")return;const f=e.target.files[0];if(!f)return;
+  try{const d=await shrinkPhoto(f);keepFormC(()=>{cPhoto=d;cErr="";renderAdmin()})}catch(er){keepFormC(()=>{cErr="這張照片讀不出來，請換一張。";renderAdmin()})}});
+$("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;const d=t.dataset;
+  if(d.cnew!==undefined){cSel=null;cMode="new";cMsg=cErr="";reC()}
+  else if(d.copen)openCard(d.copen);
+  else if(d.cclose!==undefined){cSel=null;cMode=null;cList=null;cMsg=cErr="";reC()}
+  else if(d.cinfo!==undefined){cMode="info";cMsg=cErr="";reC();window.scrollTo(0,0)}
+  else if(d.ccancel!==undefined){cMode=null;cEditV=null;cPhoto=undefined;cErr="";reC()}
+  else if(d.cvisit!==undefined){cMode="visit";cEditV=null;cPhoto=undefined;cMsg=cErr="";if(isOwner()&&admins===null)loadAdmins().then(()=>keepFormC(renderAdmin));renderAdmin();window.scrollTo(0,0)}
+  else if(d.cedit){cMode="visit";cEditV=d.cedit;cPhoto=undefined;cMsg=cErr="";renderAdmin();window.scrollTo(0,0)}
+  else if(d.cphrm!==undefined)keepFormC(()=>{cPhoto=null;renderAdmin()});
+  else if(d.cdel){cDelV=d.cdel;reC()}
+  else if(d.cdelno!==undefined){cDelV=null;reC()}
+  else if(d.cdelyes){const vid=d.cdelyes;delVisit(cSel.id,vid).then(async()=>{cDelV=null;cMsg="已刪除。";cVisits=await getVisits(cSel.id);reC()}).catch(er=>{console.warn(er);cErr="刪除失敗，請檢查網路。";reC()})}
+  else if(d.cwallet){adminTab="wallet";openWallet(d.cwallet)}});
+$("#v-admin").addEventListener("submit",async e=>{const id=e.target.id;if(!id.startsWith("c-"))return;e.preventDefault();
+  const fail=m=>keepFormC(()=>{cErr=m;cBusy=false;renderAdmin()});
+  if(id==="c-q"){cQ=$("#cq").value;reC();return}
+  if(id==="c-info"){const g=s=>$(s).value.trim(),phone=g("#ci-phone").replace(/\D/g,"");
+    const data={name:g("#ci-name").slice(0,20),no:g("#ci-no").slice(0,20),gender:radioVal("ci-gender"),phone,tel:g("#ci-tel").slice(0,20),birthday:g("#ci-bd"),address:g("#ci-addr").slice(0,80),
+      hair:{...Object.fromEntries(HAIR.map(([k])=>[k,radioVal("ch-"+k)])),side:[...document.querySelectorAll('#v-admin input[name="ch-side"]:checked')].map(x=>x.value),liquid:g("#ch-liquid").slice(0,60)}};
+    if(!data.name)return fail("請填寫姓名。");if(phone&&!/^09\d{8}$/.test(phone))return fail("行動電話請輸入 09 開頭的 10 位數字。");
+    if(!cSel&&phone&&(cList||[]).some(c=>c.phone===phone))return fail("這支手機已經有紀錄卡了，請回列表搜尋。");
+    keepFormC(()=>{cBusy=true;cErr="";renderAdmin()});
+    try{const cid=await saveCard(cSel&&cSel.id,data);cBusy=false;cMode=null;cList=null;await openCard(cid);cMsg="已儲存。";reC()}catch(er){console.warn(er);fail("儲存失敗，請檢查網路，或確認安全規則已更新。")}return}
+  if(id==="c-visit"){const g=s=>$(s).value.trim(),date=g("#cv-date");if(!date)return fail("請選擇日期。");
+    const old=cEditV?cVisits.find(x=>x.vid===cEditV)||{}:{};
+    const data={date,designer:g("#cv-des").slice(0,20),len:radioVal("cv-len"),amount:Math.max(0,Math.round(Number(g("#cv-amt"))||0)),cut:radioVal("cv-cut"),special:radioVal("cv-sp"),damage:radioVal("cv-dmg"),
+      t1:g("#cv-t1").slice(0,6),t2:g("#cv-t2").slice(0,6),pre:$("#cv-pre").checked,post:$("#cv-post").checked,dye:g("#cv-dye").slice(0,40),note:g("#cv-note").slice(0,300),call:g("#cv-call").slice(0,300),
+      photo:cPhoto!==undefined?(cPhoto||""):(old.photo||"")};
+    keepFormC(()=>{cBusy=true;cErr="";renderAdmin()});
+    try{await saveVisit(cSel.id,cEditV,data);cBusy=false;cMode=null;cEditV=null;cPhoto=undefined;cVisits=await getVisits(cSel.id);cMsg="服務紀錄已儲存。";reC();window.scrollTo(0,0)}catch(er){console.warn(er);fail("儲存失敗，請檢查網路，或確認安全規則已更新。")}return}
+});
+
+/* ===== 匯出紀錄：下載成 Excel 打得開的 CSV ===== */
+let xFrom=null,xTo=null,xMsg="",xErr="",xBusy=false;
+function exportHTML(){const now=new Date();xFrom=xFrom||ymd(new Date(now.getFullYear(),now.getMonth(),1));xTo=xTo||ymd(now);
+  return `<h2 class="sec">匯出紀錄</h2><p class="sec-note">所有預約（包括取消的）和儲值、扣款紀錄都會一直保存在雲端。選日期範圍後下載，用 Excel 或 Google 試算表就能打開備查。</p>
+  <form id="x-f" class="card" novalidate><div class="two"><div><label class="f" for="x-from">從</label><input class="t" id="x-from" type="date" value="${xFrom}"></div><div><label class="f" for="x-to">到</label><input class="t" id="x-to" type="date" value="${xTo}"></div></div>
+  <div class="actions" style="flex-direction:column;align-items:stretch"><button class="btn" type="button" data-xp="bookings" ${xBusy?"disabled":""}>📥 下載預約紀錄</button><button class="btn" type="button" data-xp="wallet" ${xBusy?"disabled":""}>📥 下載儲值與消費紀錄</button><button class="btn ghost" type="button" data-xp="visits" ${xBusy?"disabled":""}>📥 下載燙染服務紀錄</button></div>
+  ${xErr?`<p class="err">${xErr}</p>`:""}${xMsg?`<p class="meta" style="color:var(--ok)">${xMsg}</p>`:""}</form>`}
+const csvCell=v=>{if(typeof v==="number")return String(v);let s=v==null?"":String(v);if(/^[=+\-@]/.test(s))s="'"+s;return /[",\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s};
+function download(name,rows){const txt="﻿"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n"),a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([txt],{type:"text/csv;charset=utf-8"}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
+const localDT=iso=>{if(!iso)return "";const d=new Date(iso);return `${ymd(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+async function doExport(kind){const from=xFrom,to=xTo,inR=d=>d>=from&&d<=to;let rows,name;
+  if(kind==="bookings"){let l;if(CLOUD){const q=await fdb.collection("bookings").where("date",">=",from).where("date","<=",to).get();l=q.docs.map(d=>d.data())}else l=load().filter(b=>inR(b.date));
+    l.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+    rows=[["日期","時間","姓名","手機","服務項目","預估金額","付款方式","狀態","來源","預約代碼","備註","建立時間","確認時間","取消時間"],
+      ...l.map(b=>[b.date,b.time,b.name,fmtPhone(b.phone||""),(b.items||[]).map(i=>i.name).join("、"),b.total?b.total+(b.up?" 起":""):"",b.pay?payName(b.pay):"",(ST[b.status]||[b.status])[0],b.source==="phone"?"電話預約":"線上預約",b.code,b.note||"",localDT(b.createdAt),localDT(b.confirmedAt),localDT(b.cancelledAt)])];name="Bookings"}
+  else if(kind==="wallet"){const ws=await findWallets(null,true);rows=[["時間","會員","手機","類型","金額","贈品","異動後餘額","實收金額","付款方式","說明","經手人"]];const all=[];
+    for(const w of ws){const logs=await getLogs(w.tk);logs.forEach(x=>{if(inR(ymd(new Date(x.t))))all.push([x.t,w,x])})}
+    all.sort((a,b)=>a[0].localeCompare(b[0]));
+    all.forEach(([t,w,x])=>rows.push([localDT(t),w.name,fmtPhone(w.phone||""),WT[x.type]||x.type,x.amount||"",(x.gifts||[]).map(g=>`${g.name} ${g.n>0?"+":""}${g.n}`).join("、"),x.amount||x.type==="topup"?x.balance:"",x.paid||"",x.pay?payName(x.pay):"",x.note||"",x.by||""]));name="StoredValue"}
+  else{const cs=await listCards();rows=[["日期","姓名","手機","設計師","長短","消費金額","剪髮","損傷","特別保養","時間1(分)","時間2(分)","燙前保養","燙後保養","染膏號碼","注意事項","電話訪談","有照片"]];const all=[];
+    for(const c of cs){(await getVisits(c.id)).forEach(v=>{if(inR(v.date))all.push([c,v])})}
+    all.sort((a,b)=>a[1].date.localeCompare(b[1].date));
+    all.forEach(([c,v])=>rows.push([v.date,c.name,fmtPhone(c.phone||""),v.designer,v.len,v.amount||"",v.cut,v.damage,v.special,v.t1,v.t2,v.pre?"✓":"",v.post?"✓":"",v.dye,v.note,v.call,v.photo?"有":""]));name="PermDyeRecords"}
+  download(`LingHair_${name}_${from}_to_${to}.csv`,rows);return rows.length-1}
+$("#v-admin").addEventListener("change",e=>{if(e.target.id==="x-from")xFrom=e.target.value;if(e.target.id==="x-to")xTo=e.target.value});
+$("#v-admin").addEventListener("click",async e=>{const t=e.target.closest("[data-xp]");if(!t)return;xMsg=xErr="";
+  if(!xFrom||!xTo||xFrom>xTo){xErr="請確認日期範圍。";return reAdmin()}
+  xBusy=true;reAdmin();try{const n=await doExport(t.dataset.xp);xMsg=`已下載 ${n} 筆。`}catch(er){console.warn(er);xErr="匯出失敗，請檢查網路，或確認安全規則已更新。"}xBusy=false;reAdmin()});
 
 /* ===== 分頁與底部列 ===== */
 function go(v){view=v;
