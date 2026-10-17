@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>伶髮藝線上預約</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
@@ -19,125 +22,125 @@
   --bg:#15100c; --card:#221913; --line:#3a2c22; --ink:#f0e4d4; --ink-2:#b5a08b;
   --on-dark:#f3e6d3; --ok:#86b07e; --danger:#e08a73; color-scheme:dark}
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:20px;line-height:1.6}
 .wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:0 120px}
 header.top{background:var(--espresso);color:var(--on-dark);padding:22px 16px 0;text-align:center}
 .logo{display:block;width:120px;height:120px;margin:0 auto 8px;border-radius:50%;box-shadow:0 0 0 3px var(--gold)}
-.brand{font-family:var(--f-display);font-size:26px;letter-spacing:.18em;color:var(--gold-soft);margin:0}
-.tag{font-size:12px;letter-spacing:.3em;color:var(--on-dark);opacity:.75;margin:2px 0 14px}
+.brand{font-family:var(--f-display);font-size:34px;letter-spacing:.18em;color:var(--gold-soft);margin:0}
+.tag{font-size:15px;letter-spacing:.2em;white-space:nowrap;color:var(--on-dark);opacity:.75;margin:2px 0 14px}
 nav.tabs{display:flex;max-width:560px;margin:0 auto}
-nav.tabs button{flex:1;background:none;border:0;color:var(--on-dark);opacity:.6;font:inherit;font-size:14px;padding:12px 2px;border-bottom:3px solid transparent;cursor:pointer}
+nav.tabs button{flex:1;background:none;border:0;color:var(--on-dark);opacity:.6;font:inherit;font-size:16px;white-space:nowrap;padding:12px 2px;border-bottom:3px solid transparent;cursor:pointer}
 nav.tabs button[aria-selected="true"]{opacity:1;border-bottom-color:var(--gold);color:var(--gold-soft)}
 button:focus-visible,input:focus-visible,textarea:focus-visible,.chip:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-h2.sec{font-family:var(--f-display);font-size:21px;letter-spacing:.12em;margin:28px 0 4px;display:flex;align-items:center;gap:10px}
+h2.sec{font-family:var(--f-display);font-size:28px;letter-spacing:.12em;margin:28px 0 4px;display:flex;align-items:center;gap:10px}
 h2.sec::after{content:"";flex:1;height:1px;background:var(--line)}
-.sec-note{color:var(--ink-2);font-size:13px;margin:0 0 12px}
+.sec-note{color:var(--ink-2);font-size:17px;margin:0 0 12px}
 .list{display:grid;gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
 .card.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
 .row{display:flex;align-items:baseline;gap:10px;justify-content:space-between}
-.name{font-family:var(--f-display);font-size:18px;font-weight:700;min-width:0}
-.price{font-family:var(--f-display);font-size:19px;color:var(--gold);white-space:nowrap;font-variant-numeric:tabular-nums}
-.price small{font-size:12px;margin-left:2px}
+.name{font-family:var(--f-display);font-size:24px;font-weight:700;min-width:0}
+.price{font-family:var(--f-display);font-size:25px;color:var(--gold);white-space:nowrap;font-variant-numeric:tabular-nums}
+.price small{font-size:16px;margin-left:2px}
 .inc{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px}
-.inc li{font-size:12px;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
+.inc li{font-size:16px;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
 .inc li b{font-weight:500;color:var(--gold)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.chip{font:inherit;font-size:14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;font-variant-numeric:tabular-nums}
+.chip{font:inherit;font-size:18px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;font-variant-numeric:tabular-nums}
 .chip[aria-pressed="true"]{background:var(--espresso);color:var(--gold-soft);border-color:var(--espresso)}
 .chip:disabled{opacity:.35;cursor:not-allowed;text-decoration:line-through}
-.pick{margin-top:10px;font:inherit;font-size:14px;border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:999px;padding:5px 14px;cursor:pointer}
+.pick{margin-top:10px;font:inherit;font-size:18px;border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:999px;padding:5px 14px;cursor:pointer}
 .card.sel .pick{background:var(--gold);color:var(--espresso)}
 .simple{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
-.simple .name{font-size:16px;flex:1}
-.box{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--gold);flex:none;display:grid;place-items:center;color:var(--espresso);font-size:14px}
+.simple .name{font-size:21px;flex:1}
+.box{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--gold);flex:none;display:grid;place-items:center;color:var(--espresso);font-size:16px}
 .card.sel .box{background:var(--gold)}
-.fine{font-size:12px;color:var(--ink-2);margin:8px 0 0}
+.fine{font-size:16px;color:var(--ink-2);margin:8px 0 0}
 .bar{position:fixed;left:0;right:0;bottom:0;background:var(--espresso);color:var(--on-dark);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));z-index:5}
 .bar-in{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:12px}
-.bar-info{flex:1;min-width:0;font-size:13px}
-.bar-info strong{display:block;font-family:var(--f-display);font-size:20px;color:var(--gold-soft);font-variant-numeric:tabular-nums}
+.bar-info{flex:1;min-width:0;font-size:15px}
+.bar-info strong{display:block;font-family:var(--f-display);font-size:26px;color:var(--gold-soft);font-variant-numeric:tabular-nums}
 .btn{font:inherit;font-weight:700;border:0;border-radius:999px;padding:11px 22px;background:var(--gold);color:#2b1d16;cursor:pointer}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
 .btn.danger{background:var(--danger);color:#fff}
 .dates{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x mandatory}
 .date{flex:none;width:64px;scroll-snap-align:start;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:8px 0;text-align:center;font:inherit;cursor:pointer}
-.date .d{display:block;font-family:var(--f-display);font-size:22px;line-height:1.2}
-.date .w{font-size:12px;color:var(--ink-2)}
+.date .d{display:block;font-family:var(--f-display);font-size:29px;line-height:1.2}
+.date .w{font-size:16px;color:var(--ink-2)}
 .date[aria-pressed="true"]{background:var(--espresso);border-color:var(--espresso);color:var(--gold-soft)}
 .date[aria-pressed="true"] .w{color:var(--on-dark)}
 .date:disabled{opacity:.35;cursor:not-allowed}
 .times{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .times .chip{border-radius:10px;padding:8px 0;text-align:center}
-label.f{display:block;font-size:13px;color:var(--ink-2);margin:14px 0 4px}
-input.t,textarea.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+label.f{display:block;font-size:17px;color:var(--ink-2);margin:14px 0 4px}
+input.t,textarea.t{width:100%;font:inherit;font-size:21px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
 textarea.t{min-height:70px;resize:vertical}
-.err{color:var(--danger);font-size:13px;margin:6px 0 0}
+.err{color:var(--danger);font-size:17px;margin:6px 0 0}
 .sum{margin:0;padding:0;list-style:none}
 .sum li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line);font-variant-numeric:tabular-nums}
 .sum li:last-child{border-bottom:0}
-.total{display:flex;justify-content:space-between;font-family:var(--f-display);font-size:18px;margin-top:8px}
+.total{display:flex;justify-content:space-between;font-family:var(--f-display);font-size:24px;margin-top:8px}
 .total span:last-child{color:var(--gold)}
 .ticket{text-align:center;padding:26px 18px}
-.code{font-family:var(--f-display);font-size:34px;letter-spacing:.2em;color:var(--gold);margin:6px 0}
-.status{font-size:12px;border-radius:999px;padding:1px 10px;white-space:nowrap}
+.code{font-family:var(--f-display);font-size:45px;letter-spacing:.2em;color:var(--gold);margin:6px 0}
+.status{font-size:16px;border-radius:999px;padding:1px 10px;white-space:nowrap}
 .status.on{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
 .status.off{background:color-mix(in srgb,var(--ink-2) 18%,transparent);color:var(--ink-2)}
 .status.past{background:color-mix(in srgb,var(--gold) 18%,transparent);color:var(--gold)}
-.meta{color:var(--ink-2);font-size:13px;margin:4px 0 0}
+.meta{color:var(--ink-2);font-size:17px;margin:4px 0 0}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-.confirm{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--danger) 10%,transparent);font-size:14px}
+.confirm{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--danger) 10%,transparent);font-size:16px}
 .stamps{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0 6px}
-.stamp{aspect-ratio:1;max-width:100%;border-radius:50%;border:1.5px dashed var(--gold);display:grid;place-items:center;font-family:var(--f-display);color:var(--ink-2);font-size:15px}
-.stamp.on{background:var(--gold);border-style:solid;color:#2b1d16;font-size:20px}
+.stamp{aspect-ratio:1;max-width:100%;border-radius:50%;border:1.5px dashed var(--gold);display:grid;place-items:center;font-family:var(--f-display);color:var(--ink-2);font-size:17px}
+.stamp.on{background:var(--gold);border-style:solid;color:#2b1d16;font-size:23px}
 .stamp.gift{border-style:solid}
 .mcard{background:var(--espresso);color:var(--on-dark);border-radius:16px;padding:18px 16px}
 .mcard .name{color:var(--gold-soft)}
 .mcard .stamp{color:var(--on-dark)}
 .mcard .meta{color:var(--on-dark);opacity:.75}
-select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+select.t{width:100%;font:inherit;font-size:21px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
 .qr{display:block;width:200px;max-width:100%;margin:10px auto 0;border-radius:10px;background:#fff;padding:8px}
 .payrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-bottom:1px dashed var(--line)}
 .payrow:last-child{border-bottom:0}
-.payrow .lbl{flex:1;min-width:0;font-size:15px}
+.payrow .lbl{flex:1;min-width:0;font-size:17px}
 .payrow img{width:44px;height:44px;border-radius:6px;background:#fff;object-fit:contain}
-.upl{font-size:13px;color:var(--gold);cursor:pointer;border:1px solid var(--gold);border-radius:999px;padding:3px 10px}
+.upl{font-size:17px;color:var(--gold);cursor:pointer;border:1px solid var(--gold);border-radius:999px;padding:3px 10px}
 .upl input{display:none}
 .subtabs{display:flex;flex-wrap:wrap;gap:8px;padding:16px 0 4px}
 .subtabs .chip{flex:none}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:10px}
-.cw{text-align:center;font-size:12px;color:var(--ink-2)}
+.cw{text-align:center;font-size:16px;color:var(--ink-2)}
 .cday{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;min-height:52px;padding:4px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;min-width:0}
 .cday .n{font-variant-numeric:tabular-nums}
 .cday.today{border-color:var(--gold)}
 .cday.sel{background:var(--espresso);color:var(--gold-soft);border-color:var(--espresso)}
 .cday.closed{opacity:.5}
-.tag-s{font-size:11px;color:var(--ink-2)}
+.tag-s{font-size:15px;color:var(--ink-2)}
 .dots{display:flex;gap:2px}
-.dc,.dp{font-style:normal;font-size:11px;line-height:16px;min-width:16px;padding:0 3px;border-radius:8px;text-align:center}
+.dc,.dp{font-style:normal;font-size:15px;line-height:16px;min-width:16px;padding:0 3px;border-radius:8px;text-align:center}
 .dc{background:var(--ok);color:#fff}
 .dp{background:var(--gold);color:#2b1d16}
-.legend{font-size:12px;color:var(--ink-2);margin:8px 0 0}
-.notice{margin:14px 0 0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--gold) 18%,transparent);font-size:14px}
+.legend{font-size:16px;color:var(--ink-2);margin:8px 0 0}
+.notice{margin:14px 0 0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--gold) 18%,transparent);font-size:16px}
 .card.dim{opacity:.55}
-.chk{display:flex;gap:8px;align-items:center;margin-top:14px;font-size:14px}
+.chk{display:flex;gap:8px;align-items:center;margin-top:14px;font-size:16px}
 .empty{text-align:center;color:var(--ink-2);padding:28px 10px}
-.hours{font-size:13px;color:var(--ink-2);margin:14px 0 0;text-align:center}
+.hours{font-size:17px;color:var(--ink-2);margin:14px 0 0;text-align:center}
 /* 儲值會員卡 */
-.bal{font-family:var(--f-display);font-size:38px;color:var(--gold-soft);line-height:1.2;font-variant-numeric:tabular-nums}
+.bal{font-family:var(--f-display);font-size:51px;color:var(--gold-soft);line-height:1.2;font-variant-numeric:tabular-nums}
 .gl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.gl span{font-size:13px;border:1px solid color-mix(in srgb,var(--gold) 60%,transparent);color:var(--gold-soft);border-radius:999px;padding:2px 10px}
+.gl span{font-size:17px;border:1px solid color-mix(in srgb,var(--gold) 60%,transparent);color:var(--gold-soft);border-radius:999px;padding:2px 10px}
 .qrbox{width:190px;margin:12px auto 6px;background:#fff;padding:6px;border-radius:10px}
 .qrbox img{display:block;width:100%;aspect-ratio:1;image-rendering:pixelated}
 .log{list-style:none;margin:0;padding:0}
-.log li{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.log li{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:16px}
 .log li:last-child{border-bottom:0}
-.log small{display:block;color:var(--ink-2);font-size:12px}
+.log small{display:block;color:var(--ink-2);font-size:14px}
 .log .r{text-align:right;max-width:48%;font-variant-numeric:tabular-nums}
 .plus{color:var(--ok)}.minus{color:var(--danger)}
 .grow{display:flex;gap:6px;margin-top:6px;align-items:center}
-.grow .t{padding:8px 10px;font-size:15px}
+.grow .t{padding:8px 10px;font-size:17px}
 .wrow{font:inherit;color:inherit;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;width:100%}
 #scan{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:20;display:grid;place-items:center;padding:16px}
 .scan-in{width:100%;max-width:420px;text-align:center;color:#fff}
@@ -149,7 +152,7 @@ select.t{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
 .chip.opt:has(input:focus-visible){outline:2px solid var(--gold);outline-offset:2px}
 .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .two>*{min-width:0}
-h3.sub{font-family:var(--f-display);font-size:16px;color:var(--gold);margin:18px 0 4px;letter-spacing:.1em}
+h3.sub{font-family:var(--f-display);font-size:21px;color:var(--gold);margin:18px 0 4px;letter-spacing:.1em}
 .vphoto{display:block;max-width:100%;max-height:320px;border-radius:10px;margin-top:8px}
 /* 店家專用網址（#admin）：只顯示後台 */
 body.admin-mode nav.tabs,body.admin-mode [data-go="menu"],body.admin-mode #bar{display:none!important}
@@ -316,7 +319,7 @@ function seriesCount(k){return k==="wash"?(sel.wash?1:0):k==="care"?Object.keys(
 function renderMenu(){
   const h=[];
   h.push(`<div class="series" role="tablist" style="position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:12px 0 10px;margin:0 -2px">
-    ${SERIES.map(([k,n])=>{const c=seriesCount(k);return `<button class="chip" role="tab" data-series="${k}" aria-pressed="${menuTab===k}" style="flex:1 0 auto;padding:6px 9px;border-radius:999px;font-size:13.5px">${n}${c?` <b style="color:var(--gold)">${c}</b>`:""}</button>`}).join("")}</div>`);
+    ${SERIES.map(([k,n])=>{const c=seriesCount(k);return `<button class="chip" role="tab" data-series="${k}" aria-pressed="${menuTab===k}" style="flex:1 0 auto;padding:6px 10px;border-radius:999px;font-size:15px">${n}${c?` <b style="color:var(--gold)">${c}</b>`:""}</button>`}).join("")}</div>`);
   if(menuTab==="wash"){h.push(`<h2 class="sec">洗護方案</h2><p class="sec-note">每個方案擇一，皆含洗後保養與專業吹整。</p><div class="list">`);
   for(const w of WASH){const on=sel.wash===w.id;
     h.push(`<div class="card${on?" sel":""}"><div class="row"><span class="name">${w.name}</span><span class="price">${money(w.price)}</span></div>
@@ -439,7 +442,7 @@ function renderTicket(){const b=lastBooking;
   $("#v-book").innerHTML=`<div class="card ticket" style="margin-top:24px">
     <p style="margin:0;color:var(--ok);font-weight:700">預約已送出</p><p class="meta" style="margin:0">店家確認後會保留這個時段</p>
     <p class="meta">預約代碼</p><div class="code">${b.code}</div>
-    <p style="margin:0;font-family:var(--f-display);font-size:18px">${fmtDate(b.date)} ${b.time}</p>
+    <p style="margin:0;font-family:var(--f-display);font-size:21px">${fmtDate(b.date)} ${b.time}</p>
     <p class="meta">${esc(b.name)}・${b.phone}</p>
     ${F.member&&getMember(b.phone)?`<p class="meta" style="color:var(--gold)">會員・目前 ${getMember(b.phone).points} 點，到店消費後由店家幫你集點</p>`:""}</div>
     <div class="card" style="margin-top:12px"><ul class="sum">${b.items.map(i=>`<li><span>${esc(i.name)}</span><span>${money(i.price)}${i.up?" up":""}</span></li>`).join("")}</ul>
