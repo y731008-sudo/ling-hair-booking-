@@ -154,6 +154,12 @@ select.t{width:100%;font:inherit;font-size:21px;padding:10px 12px;border:1px sol
 .two>*{min-width:0}
 h3.sub{font-family:var(--f-display);font-size:21px;color:var(--gold);margin:18px 0 4px;letter-spacing:.1em}
 .vphoto{display:block;max-width:100%;max-height:320px;border-radius:10px;margin-top:8px}
+/* 新預約提醒 */
+#alert{position:fixed;left:0;right:0;top:0;z-index:30;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px))}
+.alert-in{max-width:560px;margin:0 auto;background:var(--espresso);color:var(--on-dark);border:2px solid var(--gold);border-radius:16px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.alert-in b{color:var(--gold-soft);font-size:22px}.alert-in p{margin:8px 0 0}.alert-in small{opacity:.8}
+.alert-in .btn.ghost{color:var(--on-dark);border-color:var(--gold)}
+@media (prefers-reduced-motion:no-preference){.alert-in{animation:pop .3s ease-out}@keyframes pop{from{transform:translateY(-30px);opacity:0}}}
 /* 店家專用網址（#admin）：只顯示後台 */
 body.admin-mode nav.tabs,body.admin-mode [data-go="menu"],body.admin-mode #bar{display:none!important}
 @media (prefers-reduced-motion:no-preference){.card,.chip,.date{transition:background .15s,border-color .15s}}
@@ -277,10 +283,10 @@ function refresh(){if(view==="menu")renderMenu();if(view==="book"&&!lastBooking)
   if(view==="admin"&&(adminTab==="cal"||(CLOUD&&!isAdmin)))renderAdmin()}
 function startCloud(){if(!CLOUD)return;let unsub=null;
   fdb.collection("config").doc("shop").onSnapshot(d=>{if(d.exists)applySettings(d.data());refresh()},e=>console.warn(e));
-  fauth.onAuthStateChanged(async u=>{if(unsub)unsub();isAdmin=false;
+  fauth.onAuthStateChanged(async u=>{if(unsub)unsub();isAdmin=false;seenIds=null;
     if(u){try{await fdb.collection("bookings").limit(1).get();isAdmin=true}catch(e){isAdmin=false;adminLoginErr="這個帳號沒有店家權限。";fauth.signOut()}}
     const since=ymd(new Date(Date.now()-90*864e5));
-    unsub=fdb.collection(isAdmin?"bookings":"avail").where("date",">=",since).onSnapshot(q=>{CACHE=q.docs.map(d=>({id:d.id,...d.data()}));refresh()},e=>console.warn(e));
+    unsub=fdb.collection(isAdmin?"bookings":"avail").where("date",">=",since).onSnapshot(q=>{CACHE=q.docs.map(d=>({id:d.id,...d.data()}));if(isAdmin)checkNewBookings(CACHE);refresh()},e=>console.warn(e));
     refresh()})}
 
 /* ===== 狀態 ===== */
@@ -595,7 +601,7 @@ function renderAdmin(){
   const booked=d=>load().filter(b=>isActive(b)&&b.date===d).length;
   const ax=adminPhone&&getMember(adminPhone);
   const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],...(F.member?[["member","會員集點"]]:[]),["wallet","儲值會員"],["cards","燙染紀錄卡"],["export","匯出紀錄"],["set","店家設定"]];
-  const sub=`<div class="subtabs">${tabs.map(([k,n])=>`<button class="chip" data-atab="${k}" aria-pressed="${adminTab===k}">${n}</button>`).join("")}${CLOUD?`<button class="chip" data-signout>登出</button>`:""}</div>`;
+  const sub=`<div class="subtabs">${tabs.map(([k,n])=>`<button class="chip" data-atab="${k}" aria-pressed="${adminTab===k}">${n}</button>`).join("")}${soundChip()}${CLOUD?`<button class="chip" data-signout>登出</button>`:""}</div>`;
   let body;
   if(adminTab==="cal")body=calHTML();
   else if(adminTab==="phone")body=phoneHTML();
@@ -1147,6 +1153,40 @@ $("#v-admin").addEventListener("change",e=>{if(e.target.id==="x-from")xFrom=e.ta
 $("#v-admin").addEventListener("click",async e=>{const t=e.target.closest("[data-xp]");if(!t)return;xMsg=xErr="";
   if(!xFrom||!xTo||xFrom>xTo){xErr="請確認日期範圍。";return reAdmin()}
   xBusy=true;reAdmin();try{const n=await doExport(t.dataset.xp);xMsg=`已下載 ${n} 筆。`}catch(er){console.warn(er);xErr="匯出失敗，請檢查網路，或確認安全規則已更新。"}xBusy=false;reAdmin()});
+
+/* ===== 新預約提醒：後台開著時，有客人線上預約就跳出提醒並響鈴 =====
+   瀏覽器規定要先點一下才能出聲音，所以後台有「開啟提醒聲音」按鈕；關掉網頁或手機螢幕關閉時收不到，請搭配 LINE 通知 */
+const SNDKEY="salon-alert-sound";let seenIds=null,alerts=[],sndOn=false,actx=null,wakeLock=null,ringTimer=null,titleTimer=null;
+try{sndOn=localStorage.getItem(SNDKEY)==="1"}catch(e){}
+function audioReady(){return !!(actx&&actx.state==="running")}
+function unlockAudio(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state!=="running")actx.resume()}catch(e){}}
+function chime(){if(!audioReady())return;const t0=actx.currentTime;
+  [[880,0],[1175,.18],[1568,.36]].forEach(([f,d])=>{const o=actx.createOscillator(),g=actx.createGain();o.type="sine";o.frequency.value=f;
+    g.gain.setValueAtTime(0,t0+d);g.gain.linearRampToValueAtTime(.35,t0+d+.02);g.gain.exponentialRampToValueAtTime(.001,t0+d+.6);o.connect(g).connect(actx.destination);o.start(t0+d);o.stop(t0+d+.65)})}
+async function keepAwake(){try{if(sndOn&&"wakeLock" in navigator&&document.visibilityState==="visible"&&!wakeLock){wakeLock=await navigator.wakeLock.request("screen");wakeLock.addEventListener("release",()=>{wakeLock=null})}}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")keepAwake()});
+/* 重新整理後，點畫面任何地方就恢復聲音 */
+document.addEventListener("pointerdown",()=>{if(sndOn&&!audioReady()){unlockAudio();keepAwake();if(view==="admin")setTimeout(renderAdmin,50)}},true);
+function soundChip(){if(!(CLOUD?isAdmin:true))return "";
+  return sndOn?`<button class="chip" data-snd="test" aria-pressed="true">🔔 ${audioReady()?"提醒聲音已開（試聽）":"點一下啟用聲音"}</button>`:`<button class="chip" data-snd="on">🔕 開啟提醒聲音</button>`}
+function checkNewBookings(list){const ids=new Set(list.map(b=>b.id));
+  if(seenIds===null){seenIds=ids;return}
+  const fresh=list.filter(b=>!seenIds.has(b.id)&&b.source==="online"&&isActive(b));seenIds=ids;
+  if(fresh.length)newBookingAlert(fresh)}
+function newBookingAlert(list){alerts.push(...list);renderAlert();
+  let n=0;clearInterval(ringTimer);chime();try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}
+  ringTimer=setInterval(()=>{if(++n>=3||!alerts.length)return clearInterval(ringTimer);chime()},4000);
+  clearInterval(titleTimer);const base=document.title;let on=false;titleTimer=setInterval(()=>{if(!alerts.length){document.title=base;return clearInterval(titleTimer)}on=!on;document.title=on?`🔔 ${alerts.length} 筆新預約`:base},1000)}
+function renderAlert(){let el=$("#alert");
+  if(!alerts.length){if(el)el.remove();return}
+  if(!el){el=document.createElement("div");el.id="alert";el.setAttribute("role","alert");document.body.appendChild(el)}
+  el.innerHTML=`<div class="alert-in"><b>🔔 新預約${alerts.length>1?` ${alerts.length} 筆`:""}</b>
+    ${alerts.slice(-3).map(b=>`<p>${fmtDate(b.date)} ${b.time}　${esc(b.name)}<br><small>${(b.items||[]).map(i=>esc(i.name)).join("、")||"未指定項目"}</small></p>`).join("")}
+    <div class="actions"><button class="btn" data-alert="see">查看</button><button class="btn ghost" data-alert="ok">知道了</button></div></div>`}
+document.addEventListener("click",e=>{const t=e.target.closest("[data-alert],[data-snd]");if(!t)return;
+  if(t.dataset.snd){if(t.dataset.snd==="on"){sndOn=true;try{localStorage.setItem(SNDKEY,"1")}catch(er){}}unlockAudio();keepAwake();setTimeout(()=>{chime();if(view==="admin")renderAdmin()},80);return}
+  const first=alerts[0];alerts=[];clearInterval(ringTimer);renderAlert();
+  if(t.dataset.alert==="see"&&first){adminTab="cal";calDay=first.date;const n=new Date(),d=new Date(first.date+"T00:00:00");calMonth=(d.getFullYear()-n.getFullYear())*12+d.getMonth()-n.getMonth();adminAct=null;go("admin")}});
 
 /* ===== 分頁與底部列 ===== */
 function go(v){view=v;
