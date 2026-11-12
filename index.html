@@ -661,8 +661,8 @@ function calHTML(){
     return `<div class="card bk ${b.status==="cancelled"?"dim":""}"><div class="row"><span class="name">${b.time}　${esc(b.name)}</span><span class="status ${sc}">${sl}</span></div>
     <p class="meta">${b.phone}・${b.source==="phone"?"電話預約":"線上預約"}・代碼 ${b.code}</p>
     <p class="meta">${b.items.map(i=>esc(i.name)).join("、")||"未指定項目"}${b.note?`・${esc(b.note)}`:""}</p>
-    ${act?(adminAct&&adminAct.code===b.code?`<div class="confirm">${adminAct.type==="decline"?"確定婉拒這筆預約？":"確定取消這筆預約？"}時段會重新開放。<div class="actions"><button class="btn danger" data-ayes="${b.code}">確定</button><button class="btn ghost" data-ano>先不要</button></div></div>`
-      :`<div class="actions">${b.status!=="confirmed"?`<button class="btn" data-aconfirm="${b.code}">確認預約</button><button class="btn ghost" data-adecline="${b.code}">婉拒</button>`:`<button class="btn ghost" data-acancel="${b.code}">取消預約</button>`}</div>`):""}
+    ${act?(adminAct&&adminAct.key===bkey(b)?`<div class="confirm">${adminAct.type==="decline"?"確定婉拒這筆預約？":"確定取消這筆預約？"}時段會重新開放。<div class="actions"><button class="btn danger" data-ayes="${bkey(b)}">確定</button><button class="btn ghost" data-ano>先不要</button></div></div>`
+      :`<div class="actions">${b.status!=="confirmed"?`<button class="btn" data-aconfirm="${bkey(b)}">確認預約</button><button class="btn ghost" data-adecline="${bkey(b)}">婉拒</button>`:`<button class="btn ghost" data-acancel="${bkey(b)}">取消預約</button>`}</div>`):""}
     </div>`}).join(""):`<p class="sec-note">這天還沒有預約。</p>`}</div>
   <div class="actions"><button class="btn" data-atab="phone">在這天新增電話預約</button></div>
   ${isClosed(dd,calDay)?"":(()=>{const bl=(SHOP.blocked||{})[calDay]||[],act=all.filter(b=>isActive(b)&&b.date===calDay).map(b=>b.time),ts=slotsOf().filter(t=>!isPast(calDay,t));
@@ -683,7 +683,9 @@ function phoneHTML(){
     <div class="actions"><button class="btn" type="submit">登記預約</button></div>
   </form>`;
 }
-function setStatus(code,st){const b=load().find(x=>x.code===code&&isActive(x));if(b)changeStatus(b,st).then(()=>{if(!CLOUD)renderAdmin()}).catch(er=>{console.warn(er);adminFlash="更新失敗，請檢查網路。";renderAdmin()})}
+/* 用預約編號找人：代碼只有兩位數，過去的預約可能用過同一個代碼 */
+const bkey=b=>b.id||(b.code+"_"+b.date+"_"+b.time);
+function setStatus(key,st){const b=load().find(x=>bkey(x)===key&&isActive(x));if(b)changeStatus(b,st).then(()=>{if(!CLOUD)renderAdmin()}).catch(er=>{console.warn(er);adminFlash="更新失敗，請檢查網路。";renderAdmin()})}
 $("#v-admin").addEventListener("change",e=>{
   if(e.target.id==="a-goal"){const n=Math.max(1,Math.min(30,parseInt(e.target.value)||10));SHOP.goal=n;saveSettings();renderAdmin();renderMember()}
   if(e.target.id==="a-reward"){SHOP.reward=e.target.value;saveSettings();renderMember()}
@@ -705,8 +707,8 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
   if(t.dataset.blk){const a=(SHOP.blocked=SHOP.blocked||{})[calDay]=(SHOP.blocked[calDay]||[]).slice(),i=a.indexOf(t.dataset.blk);i<0?a.push(t.dataset.blk):a.splice(i,1);a.sort();saveSettings();re();return}
   if(t.dataset.aconfirm){setStatus(t.dataset.aconfirm,"confirmed");re();return}
-  if(t.dataset.adecline){adminAct={code:t.dataset.adecline,type:"decline"};re();return}
-  if(t.dataset.acancel){adminAct={code:t.dataset.acancel,type:"cancel"};re();return}
+  if(t.dataset.adecline){adminAct={key:t.dataset.adecline,type:"decline"};re();return}
+  if(t.dataset.acancel){adminAct={key:t.dataset.acancel,type:"cancel"};re();return}
   if(t.dataset.ano!==undefined){adminAct=null;re();return}
   if(t.dataset.ayes){setStatus(t.dataset.ayes,"cancelled");adminAct=null;re();return}
   if(t.dataset.paytoggle){const id=t.dataset.paytoggle,a=SHOP.pay;
