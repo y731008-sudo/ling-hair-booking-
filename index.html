@@ -423,6 +423,7 @@ function dayHasSlot(date,dur){return slotsOf().some(t=>!isPast(date,t)&&!slotBlo
 function renderBook(){
   const items=chosenItems();
   if(lastBooking){renderTicket();return}
+  if(needJoin()){$("#v-book").innerHTML=joinHTML();return}
   if(!items.length){$("#v-book").innerHTML=`<div class="empty"><p>請先到「價目表」選擇想預約的項目。</p><button class="btn" data-go="menu">前往價目表</button></div>`;return}
   const days=[];const now=new Date();
   for(let i=0;i<SHOP.days;i++){const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i);days.push(d)}
@@ -490,8 +491,35 @@ function lineBox(){if(!lineOn())return "";
     ${lineFriend?"":`<p class="err" style="margin:8px 0 0">你還沒加入伶髮藝 LINE 好友，加入後才收得到通知：</p><a class="btn" style="display:block;text-decoration:none;text-align:center;margin-top:6px;background:#06C755;border-color:#06C755;color:#fff" target="_blank" rel="noopener" href="https://line.me/R/ti/p/${encodeURIComponent(LINE_OA_ID)}">加入 LINE 好友</a>`}</div>`;
   return `<div class="card linebox" style="margin-top:12px;text-align:center"><p style="margin:0 0 8px"><b>用 LINE 加入會員（免費）</b></p>
     <button type="button" class="btn" data-linelogin="book" style="width:100%;background:#06C755;border-color:#06C755;color:#fff">用 LINE 加入／登入會員</button>
-    <p class="meta" style="margin:8px 0 0">預約要店家確認後才算成功，加入會員後結果會傳到你的 LINE，下次預約也不用再填姓名電話。</p>
-    <label class="chk" style="justify-content:center;margin-top:6px"><input type="checkbox" id="f-noline" ${noLine?"checked":""}> 我沒有 LINE，自己到「查詢」看結果</label></div>`}
+    <p class="meta" style="margin:8px 0 0">預約要店家確認後才算成功，加入會員後結果會傳到你的 LINE，下次預約也不用再填姓名電話。</p></div>`}
+/* ===== 先加入會員：開了 LINE 登入後，預約前要先用 LINE 加入會員（只要一次），之後直接預約 ===== */
+let joinErr="",joinBusy=false,joinDone=false;
+const needJoin=()=>lineOn()&&!noLine&&!lastBooking&&(!lineUser||!lineMember);
+function joinHTML(){
+  if(!lineUser)return `<div class="card" style="margin-top:24px;text-align:center"><p style="margin:0;font-family:var(--f-display);font-size:21px">先加入會員，再開始預約</p>
+    <p class="meta" style="margin:8px 0 14px">免費，只要做一次。加入後每次預約不用再填資料，店家確認結果也會用 LINE 通知你。</p>
+    <button type="button" class="btn" data-linelogin="book" style="width:100%;background:#06C755;border-color:#06C755;color:#fff">用 LINE 加入會員</button>
+    <p class="meta" style="margin:10px 0 0">已經是會員？按上面的按鈕就會直接登入。</p></div>
+    <p class="fine" style="text-align:center"><button type="button" class="chip" data-noline>我沒有 LINE，直接預約</button></p>`;
+  return `<h2 class="sec">加入會員</h2><p class="sec-note">嗨 ${esc(lineUser.name)}！填一次就好，之後預約會自動帶入。</p>
+  <form id="jf2" class="card" novalidate>
+    <label class="f" for="j2-name">姓名</label><input class="t" id="j2-name" autocomplete="name" placeholder="王小美">
+    <label class="f" for="j2-phone">手機號碼</label><input class="t" id="j2-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912345678">
+    ${joinErr?`<p class="err">${esc(joinErr)}</p>`:""}
+    <div class="actions"><button class="btn" type="submit" ${joinBusy?"disabled":""}>${joinBusy?"加入中…":"加入會員"}</button></div></form>
+  ${lineFriend?"":`<p class="err">你還沒加入伶髮藝 LINE 好友，加入後才收得到預約通知：</p><a class="btn" style="display:block;text-decoration:none;text-align:center;background:#06C755;border-color:#06C755;color:#fff" target="_blank" rel="noopener" href="https://line.me/R/ti/p/${encodeURIComponent(LINE_OA_ID)}">加入 LINE 好友</a>`}`}
+function joinedHTML(){return `<div class="card ticket" style="margin-top:24px;text-align:center"><p style="margin:0;color:var(--ok);font-weight:700;font-size:20px">✓ 已加入會員</p>
+  <p class="meta">${esc(lineMember.name)}・${esc(lineMember.phone)}</p><p class="meta">之後預約會自動帶入資料，店家確認後會用 LINE 通知你。</p>
+  <div class="actions" style="justify-content:center"><button class="btn" data-go="menu">開始預約</button></div></div>`}
+document.addEventListener("click",e=>{if(e.target.closest("[data-noline]")){noLine=true;keepForm(renderBook)}});
+document.addEventListener("submit",async e=>{if(e.target.id!=="jf2")return;e.preventDefault();
+  const name=$("#j2-name").value.trim(),phone=$("#j2-phone").value.replace(/\D/g,""),re=()=>{const v=[name,$("#j2-phone").value];renderBook();if($("#j2-name")){$("#j2-name").value=v[0];$("#j2-phone").value=v[1]}};
+  joinErr="";if(!name){joinErr="請填寫姓名。";return re()}if(!/^09\d{8}$/.test(phone)){joinErr="手機號碼請輸入 09 開頭的 10 位數字。";return re()}
+  joinBusy=true;re();
+  try{const r=await api("register",{idToken:liff.getIDToken(),name,phone});lineMember=r.member;joinBusy=false;
+    if(chosenItems().length)renderBook();else{$("#v-book").innerHTML=joinedHTML()}window.scrollTo(0,0)}
+  catch(er){joinBusy=false;if(/過期/.test(er.message))lineExpired();joinErr=er.user?er.message:"網路不穩，請再試一次。";re()}});
+
 function saveState(v){try{sessionStorage.setItem(PKEY,JSON.stringify({v,sel:selPayload(),pickDate,pickTime,pickPay,form:formVals(),selfOpen}))}catch(e){}}
 function lineLogin(v){if(!lineOn())return;saveState(v);liff.login({redirectUri:location.origin+location.pathname})}
 async function initLine(){if(!lineOn())return;
@@ -504,6 +532,7 @@ async function initLine(){if(!lineOn())return;
   if(st&&st.sel){sel.wash=st.sel.wash||null;sel.care=Object.fromEntries(Object.entries(st.sel.care||{}).map(([k,v])=>[k,{len:v.len,ext:new Set()}]));
     sel.perm=new Set(st.sel.perm||[]);sel.dye=new Set(st.sel.dye||[]);sel.addon=new Set(st.sel.addon||[]);pickDate=st.pickDate;pickTime=st.pickTime;pickPay=st.pickPay;selfOpen=!!st.selfOpen;
     renderMenu();updateBar();lastBooking=null;go(st.v);if(st.v==="book"){setFormVals(st.form);fillMember()}if(st.v==="mine"&&lineUser)doLookup("line");return}
+  if(/[?&]join(=|%3D)1/.test(location.search)||(lineUser&&!lineMember&&view==="menu"&&!ADMIN_MODE)){go("book");if(lineMember)$("#v-book").innerHTML=joinedHTML();return}
   if(view==="book"&&!lastBooking)keepForm(renderBook);if(view==="mine")renderMine()}
 /* 會員：自動帶入姓名、手機，可以按「修改」 */
 function fillMember(){if(!lineMember||!$("#f-name"))return;if(!$("#f-name").value)$("#f-name").value=lineMember.name||"";if(!$("#f-phone").value)$("#f-phone").value=lineMember.phone||""}
@@ -520,7 +549,7 @@ $("#v-book").addEventListener("submit",async e=>{
   if(!/^09\d{8}$/.test(phone))return fail("手機號碼請輸入 09 開頭的 10 位數字。");
   const items=chosenItems(),{sum,up}=totals(items),dur=durOf(items);
   if(isPast(pickDate,pickTime)||slotBlocked(pickDate,pickTime,dur)){pickTime=null;keepForm(renderBook);return fail("這個時段剛剛被預約走了，請改選其他時間。")}
-  if(lineOn()&&!lineUser&&!noLine)return fail("請先按上面的「用 LINE 登入」，才能收到預約結果通知；沒有 LINE 請勾選「我沒有 LINE」。");
+  if(needJoin()){renderBook();return}
   const pay=F.pay?(SHOP.pay.includes(pickPay)?pickPay:SHOP.pay[0]):null;
   const btn=$("#f-submit");btn.disabled=true;btn.textContent="送出中…";let b;
   if(CLOUD){try{const r=await api("book",{name,phone,note,date:pickDate,time:pickTime,pay,sel:selPayload(),self:readSelf(),idToken:lineUser?liff.getIDToken():null});b=r.booking;if(r.member){lineMember=r.member;editMember=false}}
