@@ -12,7 +12,6 @@ service cloud.firestore {
       return isOwner() || (request.auth != null && request.auth.token.email is string
         && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())));
     }
-    function activeStatus(s) { return s in ['pending', 'confirmed']; }
 
     // 管理員名單：文件編號是 Email（小寫）；管理員可讀，只有店主能新增或移除
     match /admins/{email} {
@@ -20,45 +19,27 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
-    // 店家設定（公休日、付款方式、集點規則）：大家可讀，只有店家能改
+    // 店家設定（公休日、付款方式）與價目表 config/menu：大家可讀，只有店家能改
     match /config/{doc} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // 完整預約資料：知道隨機編號才能讀單筆；只有店家能列出全部
+    // 完整預約資料（含姓名、電話）：只有店家能讀寫。
+    // 客人預約、查詢、取消都經過 Google Apps Script 後端（用店主帳號權限，並驗證手機＋代碼或 LINE 登入）
     match /bookings/{id} {
-      allow get: if true;
-      allow list: if isAdmin();
-      allow create: if isAdmin()
-        || (request.resource.data.status == 'pending' && request.resource.data.source == 'online');
-      allow update: if isAdmin()
-        || (activeStatus(resource.data.status)
-            && request.resource.data.status == 'cancelled'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']));
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // 空檔資料：只有日期、時間、狀態、代碼，沒有姓名電話，給客人判斷哪些時段可選
+    // 空檔資料：只有日期、開始時間、所需時間、狀態，沒有姓名電話代碼，給客人判斷哪些時段可選；只有店家能改
     match /avail/{id} {
       allow read: if true;
-      allow create: if isAdmin()
-        || (request.resource.data.status == 'pending'
-            && request.resource.data.keys().hasOnly(['date', 'time', 'status', 'code']));
-      allow update: if isAdmin()
-        || (activeStatus(resource.data.status)
-            && request.resource.data.status == 'cancelled'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    // 用手機號碼雜湊找回自己的預約編號
+    // 舊版「用手機號碼雜湊找預約」的索引：已停用，只留給店家
     match /lookup/{key} {
-      allow get: if true;
-      allow list: if isAdmin();
-      allow create, update: if request.resource.data.keys().hasOnly(['ids'])
-        && request.resource.data.ids.size() <= 200;
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     // 儲值會員卡：文件編號是隨機卡號，客人知道卡號才讀得到自己的卡；只有店家能開卡、儲值、扣款，不能刪除
@@ -83,12 +64,9 @@ service cloud.firestore {
     }
 
     // 會員：文件編號是手機號碼雜湊；客人只能新建 0 點的會員，蓋點和兌換只有店家能做
+    // （集點功能目前關閉，只留給店家）
     match /members/{key} {
-      allow get: if true;
-      allow list: if isAdmin();
-      allow create: if isAdmin()
-        || (request.resource.data.points == 0 && request.resource.data.history.size() == 0);
-      allow update, delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
   }
 }

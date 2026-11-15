@@ -196,6 +196,7 @@ body.admin-mode nav.tabs,body.admin-mode [data-go="menu"],body.admin-mode #bar{d
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 /* ===== 店家設定：營業時間、可同時服務人數、可預約天數 ===== */
 /* ===== 功能開關：會員集點、電子支付 ===== */
@@ -207,7 +208,13 @@ const FIREBASE_CONFIG = {"apiKey": "AIzaSyBhYqJT8IZ04bpdePEJEJXHfZVFdnU3OfI", "a
 const OWNER_EMAILS = ["yoyo20121117@gmail.com"];
 /* ===== LINE 官方帳號 ID（@ 開頭）：填了之後，預約完成畫面會有「用 LINE 接收預約明細」按鈕；留空則不顯示 ===== */
 const LINE_OA_ID = "@409xwzvn";
-const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbyeUShisfgkveslmH3ijC9NXuQqZw4hW2k7nc0pDPFiWNASILCCTTBHWpR06zhilkq2/exec";
+/* ===== 預約後端：Google Apps Script 網頁應用程式網址。客人預約、查詢、取消都經過這裡，資料庫只開放給店家 ===== */
+const API_URL = "https://script.google.com/macros/s/AKfycbyeUShisfgkveslmH3ijC9NXuQqZw4hW2k7nc0pDPFiWNASILCCTTBHWpR06zhilkq2/exec";
+/* ===== LINE 登入（LIFF ID）：在後台「店家設定」填寫（存在 config/shop）。填了之後客人送出預約前要用 LINE 登入，店家確認／婉拒時自動用 LINE 通知客人；留空則不需登入 ===== */
+let LIFF_ID = "";
+async function api(action,data){
+  const r=await fetch(API_URL,{method:"POST",body:JSON.stringify({action,...data})});
+  const j=await r.json();if(!j.ok)throw Object.assign(new Error(j.error||"系統忙碌，請稍後再試一次。"),{user:!!j.error});return j}
 const CLOUD = !!(FIREBASE_CONFIG && window.firebase);
 let fdb=null,fauth=null,isAdmin=false,CACHE=[],CACHE_M={},lastFound=[];
 if(CLOUD){firebase.initializeApp(FIREBASE_CONFIG);fdb=firebase.firestore();fauth=firebase.auth()}
@@ -219,75 +226,103 @@ const SHOP = { open:"13:00", close:"22:00" /* 最後收客時間 */, step:30, ca
 const PAYS=[["cash","現金"],["linepay","LINE Pay"],["twpay","台灣Pay"],["jkopay","街口支付"],["pxpay","全支付"],["easywallet","悠遊付"],["icashpay","icash Pay"],["card","信用卡"],["transfer","銀行轉帳"]];
 const payName=id=>(PAYS.find(p=>p[0]===id)||[,id])[1];
 const SKEY="salon-settings-v1";
-function applySettings(s){if(s){SHOP.closedWeekdays=s.closedWeekdays||[];SHOP.closedDates=s.closedDates||[];SHOP.blocked=s.blocked||{};if(s.reward)SHOP.reward=s.reward;if(s.goal)SHOP.goal=s.goal;if(s.pay)SHOP.pay=s.pay;if(s.qr)SHOP.qr=s.qr;if(Array.isArray(s.plans))SHOP.plans=s.plans}}
+function applySettings(s){if(s){LIFF_ID=s.liffId||"";SHOP.closedWeekdays=s.closedWeekdays||[];SHOP.closedDates=s.closedDates||[];SHOP.blocked=s.blocked||{};if(s.reward)SHOP.reward=s.reward;if(s.goal)SHOP.goal=s.goal;if(s.pay)SHOP.pay=s.pay;if(s.qr)SHOP.qr=s.qr;if(Array.isArray(s.plans))SHOP.plans=s.plans}}
 if(!CLOUD){try{applySettings(JSON.parse(localStorage.getItem(SKEY)||"null"))}catch(e){}}
 function saveSettings(){const today=ymd(new Date()),blocked={};for(const [d,t] of Object.entries(SHOP.blocked||{}))if(d>=today&&t.length)blocked[d]=t;SHOP.blocked=blocked;
-  const v={closedWeekdays:SHOP.closedWeekdays,closedDates:SHOP.closedDates,blocked,reward:SHOP.reward,goal:SHOP.goal,pay:SHOP.pay,qr:SHOP.qr,plans:SHOP.plans};
+  const v={closedWeekdays:SHOP.closedWeekdays,closedDates:SHOP.closedDates,blocked,reward:SHOP.reward,goal:SHOP.goal,pay:SHOP.pay,qr:SHOP.qr,plans:SHOP.plans,liffId:LIFF_ID};
   if(CLOUD){fdb.collection("config").doc("shop").set(v).catch(e=>console.warn("設定儲存失敗",e));return}
   try{localStorage.setItem(SKEY,JSON.stringify(v))}catch(e){}}
 const isClosed=(d,k)=>SHOP.closedWeekdays.includes(d.getDay())||SHOP.closedDates.includes(k);
 
-/* ===== 價目表（依 LINE DM） ===== */
-const WASH = [
-  {id:"w500",name:"小資舒壓洗",price:500,inc:[["肩頸按摩",5],["舒壓洗",10],["瞬間護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
-  {id:"w800",name:"精油舒壓洗",price:800,inc:[["多特瑞精油舒壓",10],["舒壓洗",10],["瞬間護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
-  {id:"w1000",name:"放鬆舒壓洗",price:1000,inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["頭部放鬆按摩"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
-  {id:"w1200",name:"頭皮舒壓洗",price:1200,inc:[["多特瑞舒壓",15],["頭皮按摩舒壓",15],["舒壓放鬆洗",15],["清爽頭部按摩"],["肩頸熱敷按摩"],["精華液"],["洗後保養品"],["專業吹整"]]},
-  {id:"w1500",name:"頭皮SPA洗",price:1500,inc:[["多特瑞精油舒壓",15],["頭皮按摩舒壓",15],["頭皮去角質"],["SPA舒壓洗",15],["瞬間護髮"],["肩頸熱敷按摩"],["精華液"],["洗後保養品"],["專業吹整"]]},
-  {id:"w1800",name:"頂級溫感SPA舒壓洗",price:1800,inc:[["多特瑞精油舒壓",15],["溫感舒壓按摩",15],["頭皮按摩舒壓",15],["SPA舒壓洗",15],["胜肽蛋白護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+/* ===== 價目表：存在資料庫 config/menu（後台「價目設定」修改），網站和 LINE 自動回覆都讀這一份 =====
+   下面只是第一次使用時的預設值；dur = 預約要鎖住的時間（分鐘） */
+let WASH = [
+  {id:"w500",dur:60,name:"小資舒壓洗",price:500,inc:[["肩頸按摩",5],["舒壓洗",10],["瞬間護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+  {id:"w800",dur:60,name:"精油舒壓洗",price:800,inc:[["多特瑞精油舒壓",10],["舒壓洗",10],["瞬間護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1000",dur:90,name:"放鬆舒壓洗",price:1000,inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["頭部放鬆按摩"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1200",dur:90,name:"頭皮舒壓洗",price:1200,inc:[["多特瑞舒壓",15],["頭皮按摩舒壓",15],["舒壓放鬆洗",15],["清爽頭部按摩"],["肩頸熱敷按摩"],["精華液"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1500",dur:90,name:"頭皮SPA洗",price:1500,inc:[["多特瑞精油舒壓",15],["頭皮按摩舒壓",15],["頭皮去角質"],["SPA舒壓洗",15],["瞬間護髮"],["肩頸熱敷按摩"],["精華液"],["洗後保養品"],["專業吹整"]]},
+  {id:"w1800",dur:120,name:"頂級溫感SPA舒壓洗",price:1800,inc:[["多特瑞精油舒壓",15],["溫感舒壓按摩",15],["頭皮按摩舒壓",15],["SPA舒壓洗",15],["胜肽蛋白護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]]},
 ];
 const LENGTHS = ["短髮","中長","長髮","特長"];
-const CARE = [
-  {id:"c1",name:"璀璨光分子髮膜護",prices:[1200,1400,1600,1800],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["璀璨光分子護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮洗",300],["接髮護",300]]},
-  {id:"c2",name:"光感公主護髮",prices:[1500,1700,1900,2100],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["光感公主護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮增收",300],["接髮護增收",400]]},
-  {id:"c3",name:"結構式系統護髮",prices:[2200,2500,2800,3100],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["修護基底"],["補充膠原蛋白"],["調理髮絲"],["蒸氣修護"],["換光鎖水防護"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮洗增收",300],["接髮護增收",500]]},
+let CARE = [
+  {id:"c1",dur:90,name:"璀璨光分子髮膜護",prices:[1200,1400,1600,1800],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["璀璨光分子護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮洗",300],["接髮護",300]]},
+  {id:"c2",dur:90,name:"光感公主護髮",prices:[1500,1700,1900,2100],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["光感公主護髮"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮增收",300],["接髮護增收",400]]},
+  {id:"c3",dur:120,name:"結構式系統護髮",prices:[2200,2500,2800,3100],inc:[["多特瑞精油舒壓",15],["舒壓洗",15],["修護基底"],["補充膠原蛋白"],["調理髮絲"],["蒸氣修護"],["換光鎖水防護"],["肩頸熱敷按摩"],["洗後保養品"],["專業吹整"]],ext:[["接髮洗增收",300],["接髮護增收",500]]},
 ];
-const PERM = [
-  {id:"p1",name:"冷塑燙",price:2800,up:true},{id:"p2",name:"溫塑燙",price:3500,up:true},{id:"p3",name:"縮毛矯正",price:3500,up:true},
-  {id:"p4",name:"燙前防護",price:600},{id:"p5",name:"燙後修護",price:600},{id:"p6",name:"加購結構式系統護優惠",price:1999},
+let PERM = [
+  {id:"p1",dur:180,name:"冷塑燙",price:2800,up:true},{id:"p2",dur:180,name:"溫塑燙",price:3500,up:true},{id:"p3",dur:180,name:"縮毛矯正",price:3500,up:true},
+  {id:"p4",dur:0,name:"燙前防護",price:600},{id:"p5",dur:0,name:"燙後修護",price:600},{id:"p6",dur:30,name:"加購結構式系統護優惠",price:1999},
 ];
-const DYE = [
-  {id:"d1",name:"染髮・短髮",price:2800,up:true,desc:"全頭染色"},{id:"d2",name:"染髮・中長髮",price:3800,up:true,desc:"肩膀至胸口長度"},
-  {id:"d3",name:"染髮・長髮",price:4300,up:true,desc:"胸口以下長髮"},{id:"d4",name:"漂髮單次",price:2000,up:true,desc:"為特殊色打底"},
-  {id:"d5",name:"補染髮根",price:2000,up:true,desc:"新生髮根補染"},{id:"d6",name:"染前防護",price:600},{id:"d7",name:"染後修護",price:600},
+let DYE = [
+  {id:"d1",dur:120,name:"染髮・短髮",price:2800,up:true,desc:"全頭染色"},{id:"d2",dur:150,name:"染髮・中長髮",price:3800,up:true,desc:"肩膀至胸口長度"},
+  {id:"d3",dur:150,name:"染髮・長髮",price:4300,up:true,desc:"胸口以下長髮"},{id:"d4",dur:90,name:"漂髮單次",price:2000,up:true,desc:"為特殊色打底"},
+  {id:"d5",dur:90,name:"補染髮根",price:2000,up:true,desc:"新生髮根補染"},{id:"d6",dur:0,name:"染前防護",price:600},{id:"d7",dur:0,name:"染後修護",price:600},
 ];
-const ADDON = [
-  {id:"a1",name:"肩頸按摩 20分",price:400},{id:"a2",name:"溫感深層放鬆 20分",price:500},{id:"a3",name:"清爽頭皮按摩",price:400},
-  {id:"a4",name:"胜肽蛋白水療護髮",price:400},{id:"a5",name:"髮絲大掃除",price:500},{id:"a6",name:"髮色矯正洗髮",price:600},
-  {id:"a7",name:"接髮洗增收",price:300},{id:"a8",name:"護色洗髮精",price:200},{id:"a9",name:"電棒／離子夾",price:200},
-  {id:"a10",name:"國小以下剪髮",price:400},{id:"a11",name:"國中以上剪髮",price:600},{id:"a12",name:"國中以下洗髮（無按摩）",price:400},
+let ADDON = [
+  {id:"a1",dur:20,name:"肩頸按摩 20分",price:400},{id:"a2",dur:20,name:"溫感深層放鬆 20分",price:500},{id:"a3",dur:15,name:"清爽頭皮按摩",price:400},
+  {id:"a4",dur:15,name:"胜肽蛋白水療護髮",price:400},{id:"a5",dur:15,name:"髮絲大掃除",price:500},{id:"a6",dur:15,name:"髮色矯正洗髮",price:600},
+  {id:"a7",dur:0,name:"接髮洗增收",price:300},{id:"a8",dur:0,name:"護色洗髮精",price:200},{id:"a9",dur:15,name:"電棒／離子夾",price:200},
+  {id:"a10",dur:30,name:"國小以下剪髮",price:400},{id:"a11",dur:30,name:"國中以上剪髮",price:600},{id:"a12",dur:30,name:"國中以下洗髮（無按摩）",price:400},
 ];
+
+const MENU_KEYS=["wash","care","perm","dye","addon"];
+/* 資料庫不能存「陣列裡的陣列」，所以 inc／ext 存成物件 */
+function menuToDb(){const m={};
+  m.wash=WASH.map(x=>({...x,inc:(x.inc||[]).map(([n,t])=>t?{n,m:t}:{n})}));
+  m.care=CARE.map(x=>({...x,inc:(x.inc||[]).map(([n,t])=>t?{n,m:t}:{n}),ext:(x.ext||[]).map(([n,p])=>({n,p}))}));
+  m.perm=PERM.map(x=>({...x}));m.dye=DYE.map(x=>({...x}));m.addon=ADDON.map(x=>({...x}));return m}
+function applyMenu(m){if(!m||!Array.isArray(m.wash))return;
+  const inc=l=>(l||[]).map(o=>o.m?[o.n,o.m]:[o.n]);
+  WASH=m.wash.map(x=>({...x,inc:inc(x.inc)}));CARE=(m.care||[]).map(x=>({...x,inc:inc(x.inc),ext:(x.ext||[]).map(o=>[o.n,o.p])}));
+  PERM=m.perm||[];DYE=m.dye||[];ADDON=m.addon||[];
+  if(sel.wash&&!WASH.some(x=>x.id===sel.wash))sel.wash=null;
+  for(const id of Object.keys(sel.care))if(!CARE.some(x=>x.id===id))delete sel.care[id];
+  for(const [arr,set] of [[PERM,sel.perm],[DYE,sel.dye],[ADDON,sel.addon]])[...set].forEach(id=>{if(!arr.some(x=>x.id===id))set.delete(id)})}
+const durOf=items=>Math.max(SHOP.step,Math.ceil(items.reduce((a,b)=>a+(b.dur||0),0)/SHOP.step)*SHOP.step);
+function durText(m){const h=Math.floor(m/60),r=m%60;return h?(r===30?`${h}.5 小時`:r?`${h} 小時 ${r} 分`:`${h} 小時`):`${r} 分`}
+const endTime=(t,dur)=>{const [h,m]=t.split(":").map(Number),e=h*60+m+(dur||SHOP.step);return `${pad(e/60|0)}:${pad(e%60)}`};
 
 /* ===== 儲存（此版本存在本機瀏覽器） ===== */
 const KEY="salon-bookings-v1"; let memStore=[];
 function load(){if(CLOUD)return CACHE.slice();try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):memStore}catch(e){return memStore}}
 function save(list){memStore=list;try{localStorage.setItem(KEY,JSON.stringify(list))}catch(e){}}
 /* 雲端：bookings 存完整資料（只有店家能列出）；avail 只放日期、時間、狀態、代碼，給客人判斷空檔；lookup 用手機雜湊找回自己的預約 */
-function notify(type,b){if(!CLOUD||!NOTIFY_URL||!b.id)return;
-  const d=type==="new"?{type,id:b.id,name:b.name,phone:b.phone,items:(b.items||[]).map(i=>i.name),total:b.total,up:b.up,note:b.note}:{type,id:b.id,name:b.name};
-  try{fetch(NOTIFY_URL,{method:"POST",mode:"no-cors",keepalive:true,body:JSON.stringify(d)}).catch(()=>{})}catch(e){}}
 async function addBooking(b){
   if(!CLOUD){const l=load();l.push(b);save(l);return b}
   const ref=fdb.collection("bookings").doc();b.id=ref.id;const batch=fdb.batch();
   batch.set(ref,b);
-  batch.set(fdb.collection("avail").doc(ref.id),{date:b.date,time:b.time,status:b.status,code:b.code});
-  batch.set(fdb.collection("lookup").doc(await sha(b.phone)),{ids:firebase.firestore.FieldValue.arrayUnion(ref.id)},{merge:true});
+  batch.set(fdb.collection("avail").doc(ref.id),{date:b.date,time:b.time,dur:b.dur||SHOP.step,status:b.status});
   await batch.commit();return b}
-async function changeStatus(b,st){const t=new Date().toISOString();
-  if(!CLOUD){const l=load(),x=l.find(y=>y.code===b.code&&y.date===b.date&&y.time===b.time&&isActive(y));if(x){x.status=st;x[st+"At"]=t;save(l)}return}
+/* 店家改狀態（確認、婉拒、取消）；改完請後端用 LINE 通知客人（客人有綁定 LINE 才會發） */
+async function changeStatus(b,st){const t=new Date().toISOString(),extra=st==="cancelled"?{cancelledBy:"shop"}:{};
+  if(!CLOUD){const l=load(),x=l.find(y=>y.code===b.code&&y.date===b.date&&y.time===b.time&&isActive(y));if(x){Object.assign(x,{status:st,[st+"At"]:t},extra);save(l)}return}
   const batch=fdb.batch();
-  batch.update(fdb.collection("bookings").doc(b.id),{status:st,[st+"At"]:t});
+  batch.update(fdb.collection("bookings").doc(b.id),{status:st,[st+"At"]:t,...extra});
   batch.update(fdb.collection("avail").doc(b.id),{status:st});
-  await batch.commit()}
+  await batch.commit();
+  api("status",{id:b.id}).then(r=>{if(r.sent)flashMsg("已用 LINE 通知客人。")}).catch(er=>console.warn("LINE 通知失敗",er))}
+/* 店家調整這筆預約要鎖住的時間 */
+async function changeDur(b,dur){if(!CLOUD){const l=load(),x=l.find(y=>bkey(y)===bkey(b));if(x){x.dur=dur;save(l)}return}
+  const batch=fdb.batch();batch.update(fdb.collection("bookings").doc(b.id),{dur});batch.update(fdb.collection("avail").doc(b.id),{dur});await batch.commit()}
+function flashMsg(m){let el=$("#flash");if(!el){el=document.createElement("div");el.id="flash";el.setAttribute("role","status");
+  el.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#2b211c;color:#fff;padding:10px 16px;border-radius:999px;z-index:60;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,.25)";document.body.appendChild(el)}
+  el.textContent=m;el.hidden=false;clearTimeout(el._t);el._t=setTimeout(()=>{el.hidden=true},3500)}
 function refresh(){if(view==="menu")renderMenu();if(view==="book"&&!lastBooking)keepForm(renderBook);
   if(view==="admin"&&(adminTab==="cal"||(CLOUD&&!isAdmin)))renderAdmin()}
 function startCloud(){if(!CLOUD)return;let unsub=null;
-  fdb.collection("config").doc("shop").onSnapshot(d=>{if(d.exists)applySettings(d.data());refresh()},e=>console.warn(e));
+  let lineStarted=false;
+  fdb.collection("config").doc("shop").onSnapshot(d=>{if(d.exists)applySettings(d.data());refresh();if(!lineStarted){lineStarted=true;initLine()}},e=>{console.warn(e);if(!lineStarted){lineStarted=true;initLine()}});
+  fdb.collection("config").doc("menu").onSnapshot(d=>{menuState=d.exists;if(d.exists)applyMenu(d.data());else seedMenu();if(view==="menu"||view==="book")refresh();renderMenu();updateBar()},e=>console.warn(e));
   fauth.onAuthStateChanged(async u=>{if(unsub)unsub();isAdmin=false;seenIds=null;
-    if(u){try{await fdb.collection("bookings").limit(1).get();isAdmin=true}catch(e){isAdmin=false;adminLoginErr="這個帳號沒有店家權限。";fauth.signOut()}}
+    if(u){try{await fdb.collection("bookings").limit(1).get();isAdmin=true;seedMenu()}catch(e){isAdmin=false;adminLoginErr="這個帳號沒有店家權限。";fauth.signOut()}}
     const since=ymd(new Date(Date.now()-90*864e5));
     unsub=fdb.collection(isAdmin?"bookings":"avail").where("date",">=",since).onSnapshot(q=>{CACHE=q.docs.map(d=>({id:d.id,...d.data()}));if(isAdmin)checkNewBookings(CACHE);refresh()},e=>console.warn(e));
     refresh()})}
+
+/* 資料庫還沒有價目表時，店家登入後自動存一份預設值 */
+let menuState=null;
+function seedMenu(){if(menuState===false&&isAdmin)fdb.collection("config").doc("menu").set({...menuToDb(),updatedAt:new Date().toISOString()}).catch(e=>console.warn("價目表初始化失敗",e))}
 
 /* ===== 狀態 ===== */
 const sel = { wash:null, care:{}, perm:new Set(), dye:new Set(), addon:new Set() }; // care: {id:{len, ext:Set}}
@@ -301,11 +336,11 @@ const incHTML=inc=>`<ul class="inc">${inc.map(([n,m])=>`<li>${n}${m?` <b>${m}分
 
 function chosenItems(){
   const out=[];
-  if(sel.wash){const w=WASH.find(x=>x.id===sel.wash);out.push({name:w.name,price:w.price})}
+  if(sel.wash){const w=WASH.find(x=>x.id===sel.wash);if(w)out.push({id:w.id,name:w.name,price:w.price,dur:w.dur||0})}
   for(const c of CARE){const s=sel.care[c.id];if(!s)continue;
-    out.push({name:`${c.name}（${LENGTHS[s.len]}）`,price:c.prices[s.len]});}
+    out.push({id:c.id,name:`${c.name}（${LENGTHS[s.len]}）`,price:c.prices[s.len],dur:c.dur||0});}
   for(const [arr,set] of [[PERM,sel.perm],[DYE,sel.dye],[ADDON,sel.addon]])
-    arr.forEach(x=>{if(set.has(x.id))out.push({name:x.name,price:x.price,up:!!x.up})});
+    arr.forEach(x=>{if(set.has(x.id))out.push({id:x.id,name:x.name,price:x.price,up:!!x.up,dur:x.dur||0})});
   return out;
 }
 function totals(items){return {sum:items.reduce((a,b)=>a+b.price,0),up:items.some(i=>i.up)}}
@@ -350,7 +385,7 @@ function renderMenu(){
     <p class="hours"><button class="chip" data-go="admin">店家後台</button></p>`);
   $("#v-menu").innerHTML=h.join("");
 }
-function setFor(id){return id[0]==="p"?sel.perm:id[0]==="d"?sel.dye:sel.addon}
+function setFor(id){return PERM.some(x=>x.id===id)?sel.perm:DYE.some(x=>x.id===id)?sel.dye:sel.addon}
 $("#v-menu").addEventListener("click",e=>{
   const t=e.target.closest("button,[data-toggle]");if(!t)return;
   if(t.dataset.series){menuTab=t.dataset.series;renderMenu();const m=$("#v-menu");if(m.getBoundingClientRect().top<0)m.scrollIntoView();t.blur();return}
@@ -371,17 +406,19 @@ const WK="日一二三四五六";
 function slotsOf(){const [oh,om]=SHOP.open.split(":").map(Number),[ch,cm]=SHOP.close.split(":").map(Number);
   const out=[];for(let m=oh*60+om;m<=ch*60+cm;m+=SHOP.step)out.push(`${pad(m/60|0)}:${pad(m%60)}`);return out}
 const isActive=b=>b.status==="pending"||b.status==="confirmed"||b.status==="booked";
-function taken(date,time){return load().filter(b=>isActive(b)&&b.date===date&&b.time===time).length}
-/* 每個時段最多 SHOP.capacity 位客人，待確認的預約也算；店家確認過的時段一定鎖住 */
-/* 店家在行事曆關閉的時段（現場客、其他服務）也不能預約 */
-function slotBlocked(date,time){if(((SHOP.blocked||{})[date]||[]).includes(time))return true;const l=load().filter(b=>isActive(b)&&b.date===date&&b.time===time);return l.some(b=>b.status==="confirmed")||l.length>=SHOP.capacity}
+const addMin=(t,m)=>{const [h,x]=t.split(":").map(Number),e=h*60+x+m;return `${pad(e/60|0)}:${pad(e%60)}`};
+/* 每筆預約從開始時間占到「開始＋所需時間（dur）」：待確認的也算，店家確認過的整段鎖住 */
+function occ(date,skip){const o={};load().forEach(b=>{if(!isActive(b)||b.date!==date||(skip&&bkey(b)===skip))return;
+  const n=Math.max(1,Math.ceil((b.dur||SHOP.step)/SHOP.step));for(let i=0;i<n;i++){const t=addMin(b.time,i*SHOP.step);o[t]=(o[t]||0)+(b.status==="confirmed"?SHOP.capacity:1)}});return o}
+/* 這個開始時間能不能放得下 dur 分鐘；店家在行事曆關閉的時段（現場客、其他服務）也不能預約；最後收客時間之後不檢查 */
+function canStart(date,time,dur,skip){const o=occ(date,skip),bl=(SHOP.blocked||{})[date]||[],n=Math.max(1,Math.ceil((dur||SHOP.step)/SHOP.step));
+  for(let i=0;i<n;i++){const t=addMin(time,i*SHOP.step);if(i>0&&t>SHOP.close)break;if(bl.includes(t)||(o[t]||0)>=SHOP.capacity)return false}return true}
+function slotBlocked(date,time,dur){return !canStart(date,time,dur)}
+/* 預約代碼：4 位數，查詢、取消時要和手機號碼一起輸入 */
 function genCode(){const used=new Set(load().filter(x=>isActive(x)&&!isPast(x.date,x.time)).map(x=>x.code));
-  const free=[];for(let i=0;i<100;i++){const c=pad(i);if(!used.has(c))free.push(c)}
-  let code=free.length?free[Math.random()*free.length|0]:null;
-  for(let n=100;!code;n++)if(!used.has(String(n)))code=String(n); /* 兩位數用完時改用三位數 */
-  return code}
+  for(let i=0;i<50;i++){const c=String(1000+Math.floor(Math.random()*9000));if(!used.has(c))return c}return String(Date.now()%9000+1000)}
 function isPast(date,time){return new Date(`${date}T${time}:00`)<=new Date()}
-function dayHasSlot(date){return slotsOf().some(t=>!isPast(date,t)&&!slotBlocked(date,t))}
+function dayHasSlot(date,dur){return slotsOf().some(t=>!isPast(date,t)&&!slotBlocked(date,t,dur))}
 
 function renderBook(){
   const items=chosenItems();
@@ -390,27 +427,36 @@ function renderBook(){
   const days=[];const now=new Date();
   for(let i=0;i<SHOP.days;i++){const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i);days.push(d)}
   if(pickDate){const pd=new Date(pickDate+"T00:00:00");if(isClosed(pd,pickDate)){pickDate=null;pickTime=null}}
-  if(!pickDate){const first=days.find(d=>!isClosed(d,ymd(d))&&dayHasSlot(ymd(d)));pickDate=first?ymd(first):null}
+  const dur=durOf(items);
+  if(!pickDate){const first=days.find(d=>!isClosed(d,ymd(d))&&dayHasSlot(ymd(d),dur));pickDate=first?ymd(first):null}
+  if(pickTime&&(isPast(pickDate,pickTime)||slotBlocked(pickDate,pickTime,dur)))pickTime=null;
   const {sum,up}=totals(items);
   $("#v-book").innerHTML=`
   <h2 class="sec">選擇日期</h2>
-  <div class="dates">${days.map(d=>{const k=ymd(d),closed=isClosed(d,k),full=!closed&&!dayHasSlot(k);
+  <div class="dates">${days.map(d=>{const k=ymd(d),closed=isClosed(d,k),full=!closed&&!dayHasSlot(k,dur);
     return `<button class="date" data-date="${k}" aria-pressed="${pickDate===k}" ${closed||full?"disabled":""}>
       <span class="w">${d.getMonth()+1}月</span><span class="d">${d.getDate()}</span><span class="w">${closed?"公休":full?"額滿":"週"+WK[d.getDay()]}</span></button>`}).join("")}</div>
-  <h2 class="sec">選擇時間</h2>
-  ${pickDate?`<div class="times">${slotsOf().map(t=>{const dis=isPast(pickDate,t)||slotBlocked(pickDate,t);
+  <h2 class="sec">選擇時間</h2><p class="sec-note">你選的項目約需 <b>${durText(dur)}</b>，只會顯示時間夠用的時段。</p>
+  ${pickDate?`<div class="times">${slotsOf().map(t=>{const dis=isPast(pickDate,t)||slotBlocked(pickDate,t,dur);
     return `<button class="chip" data-time="${t}" aria-pressed="${pickTime===t}" ${dis?"disabled":""}>${t}</button>`}).join("")}</div>`:`<p class="sec-note">近期已無可預約時段。</p>`}
   <h2 class="sec">聯絡資料</h2>
   <form id="bk" novalidate>
     <label class="f" for="f-name">姓名</label><input class="t" id="f-name" autocomplete="name" placeholder="王小美" required>
     <label class="f" for="f-phone">手機號碼（查詢、取消預約時使用）</label><input class="t" id="f-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912345678" required>
     <label class="f" for="f-note">備註（選填）</label><textarea class="t" id="f-note" placeholder="例：髮量較多、想染霧感奶茶色"></textarea>
+    <details class="card selfrec" style="margin-top:12px"${selfOpen?" open":""}><summary style="cursor:pointer;font-weight:700">燙染紀錄（選填）</summary>
+      <p class="meta" style="margin:6px 0 0">記得上次燙、染的時間和金額嗎？填了可以幫設計師判斷髮況。</p>
+      <div class="two"><div><label class="f" for="f-pdate">上次燙髮日期</label><input class="t" id="f-pdate" type="date" max="${ymd(new Date())}"></div><div><label class="f" for="f-pamt">燙髮金額</label><input class="t" id="f-pamt" type="number" inputmode="numeric" min="0" placeholder="例：3500"></div></div>
+      <div class="two"><div><label class="f" for="f-ddate">上次染髮日期</label><input class="t" id="f-ddate" type="date" max="${ymd(new Date())}"></div><div><label class="f" for="f-damt">染髮金額</label><input class="t" id="f-damt" type="number" inputmode="numeric" min="0" placeholder="例：2800"></div></div>
+    </details>
     ${F.pay?`<label class="f">付款方式（到店結帳時使用）</label>
     <div class="chips" id="f-pay">${SHOP.pay.map((p,i)=>`<button type="button" class="chip" data-pay="${p}" aria-pressed="${(pickPay||SHOP.pay[0])===p}">${payName(p)}</button>`).join("")}</div>`:""}
     ${F.member?`<label class="chk" for="f-join"><input type="checkbox" id="f-join" checked> 用這支手機同時加入會員（已是會員會自動辨識）</label>`:""}
     <h2 class="sec">預約內容</h2>
     <div class="card"><ul class="sum">${items.map(i=>`<li><span>${esc(i.name)}</span><span>${money(i.price)}${i.up?" up":""}</span></li>`).join("")}</ul>
-      <div class="total"><span>預估金額</span><span>${money(sum)}${up?" 起":""}</span></div></div>
+      <div class="total"><span>預估金額</span><span>${money(sum)}${up?" 起":""}</span></div>
+      <p class="meta" style="margin:6px 0 0">預計需要 ${durText(dur)}${pickTime?`（${pickTime}–${addMin(pickTime,dur)}）`:""}</p></div>
+    ${lineBox()}
     <p class="err" id="f-err" hidden></p>
     <div class="actions"><button class="btn" type="submit" id="f-submit">確認預約</button><button class="btn ghost" type="button" data-go="menu">修改項目</button></div>
   </form>`;
@@ -422,10 +468,44 @@ $("#v-book").addEventListener("click",e=>{
   else if(t.dataset.time){pickTime=t.dataset.time;keepForm(renderBook)}
   else if(t.dataset.pay){pickPay=t.dataset.pay;document.querySelectorAll("#f-pay .chip").forEach(c=>c.setAttribute("aria-pressed",c===t))}
   else if(t.dataset.newbook!==undefined){lastBooking=null;resetSel();go("menu")}
-  else if(t.dataset.lookup!==undefined){const p=lastBooking.phone;lastBooking=null;resetSel();go("mine");$("#q").value=p;doLookup()}
+  else if(t.dataset.lookup!==undefined){const {phone,code,line}=lastBooking;lastBooking=null;resetSel();go("mine");renderMine();if(line&&lineUser)doLookup("line");else{$("#q").value=phone;$("#qc").value=code;doLookup()}}
 });
-function keepForm(fn){const v={n:$("#f-name")?.value,p:$("#f-phone")?.value,o:$("#f-note")?.value};fn();
-  if($("#f-name")){$("#f-name").value=v.n||"";$("#f-phone").value=v.p||"";$("#f-note").value=v.o||""}}
+const FORM_IDS=["f-name","f-phone","f-note","f-pdate","f-pamt","f-ddate","f-damt"];
+let selfOpen=false;
+function formVals(){const d=$(".selfrec");if(d)selfOpen=d.open;return Object.fromEntries(FORM_IDS.map(id=>[id,document.getElementById(id)?.value||""]))}
+function setFormVals(v){if(!v)return;FORM_IDS.forEach(id=>{const e=document.getElementById(id);if(e&&v[id]!=null)e.value=v[id]})}
+function keepForm(fn){const v=formVals();fn();setFormVals(v)}
+function readSelf(){const g=id=>$("#"+id)?.value||"",o={};
+  if(g("f-pdate"))o.permDate=g("f-pdate");if(+g("f-pamt")>0)o.permAmt=Math.round(+g("f-pamt"));
+  if(g("f-ddate"))o.dyeDate=g("f-ddate");if(+g("f-damt")>0)o.dyeAmt=Math.round(+g("f-damt"));return Object.keys(o).length?o:null}
+function selPayload(){return {wash:sel.wash,care:Object.fromEntries(Object.entries(sel.care).map(([k,v])=>[k,{len:v.len}])),perm:[...sel.perm],dye:[...sel.dye],addon:[...sel.addon]}}
+
+/* ===== LINE 登入（LIFF）：送出預約前綁定客人的 LINE，店家確認或婉拒時自動通知 ===== */
+let lineUser=null,lineFriend=true,noLine=false;const PKEY="ling-pending";
+const lineOn=()=>!!(LIFF_ID&&window.liff&&CLOUD);
+function lineBox(){if(!lineOn())return "";
+  if(lineUser)return `<div class="card linebox" style="margin-top:12px"><p style="margin:0">✓ 已用 LINE 登入：<b>${esc(lineUser.name)}</b></p>
+    <p class="meta" style="margin:4px 0 0">店家確認或無法安排時，會用 LINE 通知你結果。</p>
+    ${lineFriend?"":`<p class="err" style="margin:8px 0 0">你還沒加入伶髮藝 LINE 好友，加入後才收得到通知：</p><a class="btn" style="display:block;text-decoration:none;text-align:center;margin-top:6px;background:#06C755;border-color:#06C755;color:#fff" target="_blank" rel="noopener" href="https://line.me/R/ti/p/${encodeURIComponent(LINE_OA_ID)}">加入 LINE 好友</a>`}</div>`;
+  return `<div class="card linebox" style="margin-top:12px;text-align:center"><p style="margin:0 0 8px"><b>用 LINE 登入，收預約結果通知</b></p>
+    <button type="button" class="btn" data-linelogin="book" style="width:100%;background:#06C755;border-color:#06C755;color:#fff">用 LINE 登入</button>
+    <p class="meta" style="margin:8px 0 0">預約要店家確認後才算成功，登入後結果會傳到你的 LINE。</p>
+    <label class="chk" style="justify-content:center;margin-top:6px"><input type="checkbox" id="f-noline" ${noLine?"checked":""}> 我沒有 LINE，自己到「查詢」看結果</label></div>`}
+function saveState(v){try{sessionStorage.setItem(PKEY,JSON.stringify({v,sel:selPayload(),pickDate,pickTime,pickPay,form:formVals(),selfOpen}))}catch(e){}}
+function lineLogin(v){if(!lineOn())return;saveState(v);liff.login({redirectUri:location.origin+location.pathname})}
+async function initLine(){if(!lineOn())return;
+  try{await liff.init({liffId:LIFF_ID});
+    if(liff.isLoggedIn()){const p=await liff.getProfile();lineUser={name:p.displayName};
+      try{const f=await liff.getFriendship();lineFriend=!!f.friendFlag}catch(e){}}}
+  catch(e){console.warn("LINE 登入初始化失敗",e)}
+  let st=null;try{st=JSON.parse(sessionStorage.getItem(PKEY)||"null");sessionStorage.removeItem(PKEY)}catch(e){}
+  if(st&&st.sel){sel.wash=st.sel.wash||null;sel.care=Object.fromEntries(Object.entries(st.sel.care||{}).map(([k,v])=>[k,{len:v.len,ext:new Set()}]));
+    sel.perm=new Set(st.sel.perm||[]);sel.dye=new Set(st.sel.dye||[]);sel.addon=new Set(st.sel.addon||[]);pickDate=st.pickDate;pickTime=st.pickTime;pickPay=st.pickPay;selfOpen=!!st.selfOpen;
+    renderMenu();updateBar();lastBooking=null;go(st.v);if(st.v==="book")setFormVals(st.form);if(st.v==="mine"&&lineUser)doLookup("line");return}
+  if(view==="book"&&!lastBooking)keepForm(renderBook);if(view==="mine")renderMine()}
+function lineExpired(){try{liff.logout()}catch(e){}lineUser=null}
+document.addEventListener("click",e=>{const t=e.target.closest("[data-linelogin]");if(t)lineLogin(t.dataset.linelogin)});
+document.addEventListener("change",e=>{if(e.target.id==="f-noline")noLine=e.target.checked});
 $("#v-book").addEventListener("submit",async e=>{
   e.preventDefault();const err=$("#f-err");
   const name=$("#f-name").value.trim(),phone=$("#f-phone").value.replace(/\D/g,""),note=$("#f-note").value.trim();
@@ -433,75 +513,84 @@ $("#v-book").addEventListener("submit",async e=>{
   if(!pickDate||!pickTime)return fail("請選擇預約日期與時間。");
   if(!name)return fail("請填寫姓名。");
   if(!/^09\d{8}$/.test(phone))return fail("手機號碼請輸入 09 開頭的 10 位數字。");
-  if(isPast(pickDate,pickTime)||slotBlocked(pickDate,pickTime)){pickTime=null;keepForm(renderBook);return fail("這個時段剛剛被預約走了，請改選其他時間。")}
-  const items=chosenItems(),{sum,up}=totals(items);
-  const code=genCode();
-  const b={code,name,phone,note,date:pickDate,time:pickTime,items,total:sum,up,pay:F.pay?(SHOP.pay.includes(pickPay)?pickPay:SHOP.pay[0]):null,status:"pending",source:"online",createdAt:new Date().toISOString()};
-  const btn=$("#f-submit");btn.disabled=true;btn.textContent="送出中…";
-  try{await addBooking(b)}catch(er){console.warn(er);btn.disabled=false;btn.textContent="確認預約";return fail("網路不穩，預約沒有送出，請再按一次。")}
-  notify("new",b);
+  const items=chosenItems(),{sum,up}=totals(items),dur=durOf(items);
+  if(isPast(pickDate,pickTime)||slotBlocked(pickDate,pickTime,dur)){pickTime=null;keepForm(renderBook);return fail("這個時段剛剛被預約走了，請改選其他時間。")}
+  if(lineOn()&&!lineUser&&!noLine)return fail("請先按上面的「用 LINE 登入」，才能收到預約結果通知；沒有 LINE 請勾選「我沒有 LINE」。");
+  const pay=F.pay?(SHOP.pay.includes(pickPay)?pickPay:SHOP.pay[0]):null;
+  const btn=$("#f-submit");btn.disabled=true;btn.textContent="送出中…";let b;
+  if(CLOUD){try{const r=await api("book",{name,phone,note,date:pickDate,time:pickTime,pay,sel:selPayload(),self:readSelf(),idToken:lineUser?liff.getIDToken():null});b=r.booking}
+    catch(er){console.warn(er);btn.disabled=false;btn.textContent="確認預約";if(/過期/.test(er.message)){lineExpired();keepForm(renderBook)}
+      return fail(er.user?er.message:"網路不穩，預約沒有送出，請再按一次。")}}
+  else{b={code:genCode(),name,phone,note,date:pickDate,time:pickTime,dur,items,total:sum,up,pay,status:"pending",source:"online",self:readSelf(),createdAt:new Date().toISOString()};await addBooking(b)}
   if(F.member&&$("#f-join")?.checked){try{if(!(await fetchMember(phone)))await joinMember(name,phone,"");setMe(phone)}catch(er){console.warn(er)}}
   lastBooking=b;pickTime=null;renderBook();window.scrollTo(0,0);updateBar();
 });
 function fmtDate(k){const d=new Date(k+"T00:00:00");return `${d.getMonth()+1}月${d.getDate()}日（週${WK[d.getDay()]}）`}
 function renderTicket(){const b=lastBooking;
   $("#v-book").innerHTML=`<div class="card ticket" style="margin-top:24px">
-    <p style="margin:0;color:var(--ok);font-weight:700">預約已送出</p><p class="meta" style="margin:0">店家確認後會保留這個時段</p>
-    <p class="meta">預約代碼</p><div class="code">${b.code}</div>
-    <p style="margin:0;font-family:var(--f-display);font-size:21px">${fmtDate(b.date)} ${b.time}</p>
+    <p style="margin:0;color:var(--gold);font-weight:700;font-size:20px">⏳ 預約已送出，還沒成功喔</p>
+    <p class="meta" style="margin:4px 0 0">店家確認後才算預約成功。${b.line?"確認結果會用 LINE 通知你。":"請記下預約代碼，稍後到「查詢／取消」查看結果。"}</p>
+    <p class="meta">預約代碼（查詢、取消時要用）</p><div class="code">${b.code}</div>
+    <p style="margin:0;font-family:var(--f-display);font-size:21px">${fmtDate(b.date)} ${b.time}–${addMin(b.time,b.dur||SHOP.step)}</p>
     <p class="meta">${esc(b.name)}・${b.phone}</p>
     ${F.member&&getMember(b.phone)?`<p class="meta" style="color:var(--gold)">會員・目前 ${getMember(b.phone).points} 點，到店消費後由店家幫你集點</p>`:""}</div>
     <div class="card" style="margin-top:12px"><ul class="sum">${b.items.map(i=>`<li><span>${esc(i.name)}</span><span>${money(i.price)}${i.up?" up":""}</span></li>`).join("")}</ul>
     <div class="total"><span>預估金額</span><span>${money(b.total)}${b.up?" 起":""}</span></div></div>
     ${F.pay&&b.pay?`<div class="card" style="margin-top:12px;text-align:center"><p style="margin:0">付款方式：<b>${payName(b.pay)}</b></p>
       ${SHOP.qr[b.pay]?`<img class="qr" src="${SHOP.qr[b.pay]}" alt="${payName(b.pay)} 收款碼"><p class="meta">到店結帳時打開這個畫面掃碼付款，金額以現場為準。</p>`:`<p class="meta">到店結帳時付款，金額以現場為準。</p>`}</div>`:""}
-    ${LINE_OA_ID?`<div class="card" style="margin-top:12px;text-align:center"><p style="margin:0 0 8px">想在 LINE 收到這筆預約明細嗎？</p>
+    ${LINE_OA_ID&&!b.line?`<div class="card" style="margin-top:12px;text-align:center"><p style="margin:0 0 8px"><b>想在 LINE 收到確認通知嗎？</b></p>
       <a class="btn" style="display:block;text-decoration:none;background:#06C755;border-color:#06C755;color:#fff" target="_blank" rel="noopener"
-        href="https://line.me/R/oaMessage/${encodeURIComponent(LINE_OA_ID)}/?${encodeURIComponent(`預約確認 ${b.phone} 代碼${b.code}`)}">用 LINE 接收預約明細</a>
-      <p class="meta" style="margin:8px 0 0">會打開伶髮藝官方 LINE，按「傳送」後就會收到明細。</p></div>`:""}
-    <p class="fine">如需更改或取消，請到「查詢／取消」輸入手機號碼或預約代碼。</p>
+        href="https://line.me/R/oaMessage/${encodeURIComponent(LINE_OA_ID)}/?${encodeURIComponent(`預約確認 ${b.phone} 代碼${b.code}`)}">綁定 LINE 接收通知</a>
+      <p class="meta" style="margin:8px 0 0">會打開伶髮藝官方 LINE，按「傳送」就完成綁定，店家確認後會在 LINE 通知你。</p></div>`:""}
+    <p class="fine">如需更改或取消，請到「查詢／取消」${lineOn()?"用 LINE 登入，或":""}輸入手機號碼和預約代碼。</p>
     <div class="actions"><button class="btn" data-lookup>查看我的預約</button><button class="btn ghost" data-newbook>再預約一筆</button></div>`;
 }
 function resetSel(){sel.wash=null;sel.care={};sel.perm.clear();sel.dye.clear();sel.addon.clear();pickDate=null;pickTime=null;renderMenu();updateBar()}
 
-/* ===== 查詢／取消 ===== */
-let pendingCancel=null;
+/* ===== 查詢／取消：經過後端驗證（LINE 登入，或手機＋預約代碼），不會看到別人的預約 ===== */
+let pendingCancel=null,lastCred=null;
 function renderMine(){
   $("#v-mine").innerHTML=`<h2 class="sec">查詢預約</h2>
-  <form id="qf" novalidate><label class="f" for="q">手機號碼或預約代碼</label>
-  <div style="display:flex;gap:8px"><input class="t" id="q" placeholder="${CLOUD?"0912345678":"0912345678 或 2 位數代碼"}" style="flex:1;min-width:0"><button class="btn" type="submit">查詢</button></div></form>
-  <div id="res" class="list" style="margin-top:16px"><p class="empty">輸入預約時留下的手機號碼，或預約完成畫面上的兩位數預約代碼。</p></div>`;
+  ${lineOn()?`<div class="card" style="text-align:center"><button class="btn" data-linelookup style="width:100%;background:#06C755;border-color:#06C755;color:#fff">${lineUser?"查看我用 LINE 預約的紀錄":"用 LINE 登入查詢"}</button>
+    <p class="meta" style="margin:8px 0 0">預約時有用 LINE 登入，就能直接查詢。</p></div><p class="sec-note" style="text-align:center;margin:12px 0">或輸入手機號碼和預約代碼</p>`:""}
+  <form id="qf" novalidate><div class="two"><div><label class="f" for="q">手機號碼</label><input class="t" id="q" type="tel" inputmode="numeric" placeholder="0912345678"></div>
+  <div><label class="f" for="qc">預約代碼</label><input class="t" id="qc" inputmode="numeric" placeholder="4 位數"></div></div>
+  <div class="actions"><button class="btn" type="submit">查詢</button></div></form>
+  <div id="res" class="list" style="margin-top:16px"><p class="empty">預約代碼在預約完成畫面上${LINE_OA_ID?"，也會出現在 LINE 通知裡":""}。</p></div>`;
 }
-async function doLookup(){
-  const raw=$("#q").value.trim();if(!raw)return;
-  const ph=raw.replace(/\D/g,"");let found;
-  if(CLOUD){
-    if(!/^09\d{8}$/.test(ph)){$("#res").innerHTML=`<p class="empty">請輸入預約時留下的 10 位數手機號碼。</p>`;return}
-    $("#res").innerHTML=`<p class="empty">查詢中…</p>`;
-    try{const d=await fdb.collection("lookup").doc(await sha(ph)).get(),ids=d.exists?(d.data().ids||[]).slice(-30):[];
-      const docs=await Promise.all(ids.map(id=>fdb.collection("bookings").doc(id).get()));
-      found=docs.filter(x=>x.exists).map(x=>({id:x.id,...x.data()})).filter(b=>b.phone===ph).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))}
-    catch(er){console.warn(er);$("#res").innerHTML=`<p class="empty">網路不穩，查詢失敗，請再試一次。</p>`;return}
-  }else found=load().filter(b=>(raw.length<=3&&b.code===raw&&isActive(b)&&!isPast(b.date,b.time))||(ph.length>=8&&b.phone===ph)).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-  lastFound=found;const res=$("#res");
-  if(!found.length){res.innerHTML=`<p class="empty">找不到符合的預約，請確認號碼或代碼是否正確。</p>`;return}
+const stTag=b=>{const past=isPast(b.date,b.time);return b.status==="cancelled"?`<span class="status off">已取消</span>`:b.status==="declined"?`<span class="status off">店家無法安排</span>`:past?`<span class="status off">已過期</span>`:b.status==="confirmed"?`<span class="status on">✓ 預約成功</span>`:`<span class="status past">待店家確認</span>`};
+async function doLookup(mode){const res=$("#res");let cred;
+  if(mode==="line"){if(!lineUser)return lineLogin("mine");cred={idToken:liff.getIDToken()}}
+  else if(mode==="again")cred=lastCred;
+  else{const ph=$("#q").value.replace(/\D/g,""),code=$("#qc").value.replace(/\D/g,"");
+    if(!/^09\d{8}$/.test(ph)){res.innerHTML=`<p class="empty">請輸入預約時留下的 10 位數手機號碼。</p>`;return}
+    if(!code){res.innerHTML=`<p class="empty">請輸入預約代碼。</p>`;return}cred={phone:ph,code}}
+  if(!cred)return;lastCred=cred;res.innerHTML=`<p class="empty">查詢中…</p>`;let found;
+  if(CLOUD){try{found=(await api("lookup",cred)).list}catch(er){console.warn(er);if(/過期/.test(er.message)){lineExpired();renderMine()}
+      $("#res").innerHTML=`<p class="empty">${er.user?esc(er.message):"網路不穩，查詢失敗，請再試一次。"}</p>`;return}}
+  else found=load().filter(b=>b.phone===cred.phone).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  lastFound=found;
+  if(!found.length){res.innerHTML=`<p class="empty">${mode==="line"?"這個 LINE 帳號還沒有預約紀錄。可以改用手機號碼和預約代碼查詢。":"找不到符合的預約。"}</p>`;return}
   res.innerHTML=found.map(b=>{const past=isPast(b.date,b.time);
-    const st=b.status==="cancelled"?`<span class="status off">已取消</span>`:past?`<span class="status off">已過期</span>`:b.status==="confirmed"?`<span class="status on">店家已確認</span>`:`<span class="status past">待店家確認</span>`;
-    return `<div class="card"><div class="row"><span class="name">${fmtDate(b.date)} ${b.time}</span>${st}</div>
-    <p class="meta">代碼 ${b.code}・${esc(b.name)}</p>
+    return `<div class="card"><div class="row"><span class="name">${fmtDate(b.date)} ${b.time}</span>${stTag(b)}</div>
+    <p class="meta">代碼 ${b.code}・${esc(b.name)}・約 ${durText(b.dur||SHOP.step)}</p>
     <p class="meta">${b.items.map(i=>esc(i.name)).join("、")}</p>
     <p class="meta">預估 ${money(b.total)}${b.up?" 起":""}${F.pay&&b.pay?`・${payName(b.pay)}`:""}${b.note?`・備註：${esc(b.note)}`:""}</p>
-    ${isActive(b)&&!past?(pendingCancel===b.code
-      ?`<div class="confirm">確定要取消這筆預約嗎？取消後時段會釋出給其他客人。<div class="actions"><button class="btn danger" data-cancel-yes="${b.code}" data-d="${b.date}" data-t="${b.time}">確定取消</button><button class="btn ghost" data-cancel-no>保留預約</button></div></div>`
-      :`<div class="actions"><button class="btn ghost" data-cancel="${b.code}">取消預約</button></div>`):""}
+    ${b.status==="pending"&&!past?`<p class="meta" style="color:var(--gold)">店家確認後才算預約成功${b.line?"，結果會用 LINE 通知你":""}。</p>`:""}
+    ${isActive(b)&&!past?(pendingCancel===b.id
+      ?`<div class="confirm">確定要取消這筆預約嗎？取消後時段會釋出給其他客人。<div class="actions"><button class="btn danger" data-cancel-yes="${b.id}">確定取消</button><button class="btn ghost" data-cancel-no>保留預約</button></div></div>`
+      :`<div class="actions"><button class="btn ghost" data-cancel="${b.id}">取消預約</button></div>`):""}
     </div>`}).join("");
 }
 $("#v-mine").addEventListener("submit",e=>{e.preventDefault();pendingCancel=null;doLookup()});
-$("#v-mine").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;
-  if(t.dataset.cancel){pendingCancel=t.dataset.cancel;doLookup()}
-  else if(t.dataset.cancelNo!==undefined){pendingCancel=null;doLookup()}
-  else if(t.dataset.cancelYes){const b=lastFound.find(x=>x.code===t.dataset.cancelYes&&x.date===t.dataset.d&&x.time===t.dataset.t&&isActive(x));
-    t.disabled=true;(b?changeStatus(b,"cancelled").then(()=>notify("cancel",b)):Promise.resolve()).catch(er=>console.warn(er)).finally(()=>{pendingCancel=null;doLookup()})}
+$("#v-mine").addEventListener("click",async e=>{const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.linelookup!==undefined){pendingCancel=null;doLookup("line")}
+  else if(t.dataset.cancel){pendingCancel=t.dataset.cancel;doLookup("again")}
+  else if(t.dataset.cancelNo!==undefined){pendingCancel=null;doLookup("again")}
+  else if(t.dataset.cancelYes){t.disabled=true;const id=t.dataset.cancelYes;
+    try{if(CLOUD){const c=lastCred.idToken?{idToken:liff.getIDToken()}:lastCred;await api("cancel",{...c,id})}else{const b=lastFound.find(x=>bkey(x)===id);if(b)await changeStatus(b,"cancelled")}}
+    catch(er){console.warn(er);flashMsg(er.user?er.message:"網路不穩，取消失敗，請再試一次。")}
+    pendingCancel=null;doLookup("again")}
 });
 
 /* ===== 會員集點 ===== */
@@ -518,7 +607,7 @@ async function addHistory(phone,type,n,note){const m=loadM(),x=m[phone];if(!x)re
   if(CLOUD)await fdb.collection("members").doc(await sha(phone)).set(x);else saveM(m)}
 let mePhone=null;try{mePhone=localStorage.getItem(MEKEY)}catch(e){}
 function setMe(p){mePhone=p;try{p?localStorage.setItem(MEKEY,p):localStorage.removeItem(MEKEY)}catch(e){}}
-function allItems(){return [...WASH.map(w=>({id:w.id,name:w.name,price:w.price})),...CARE.map(c=>({id:c.id,name:c.name+"（短髮）",price:c.prices[0]})),...PERM,...DYE,...ADDON]}
+function allItems(){return [...WASH.map(w=>({id:w.id,name:w.name,price:w.price,dur:w.dur})),...CARE.map(c=>({id:c.id,name:c.name+"（短髮）",price:c.prices[0],dur:c.dur})),...PERM,...DYE,...ADDON]}
 const rewardItem=()=>allItems().find(i=>i.id===SHOP.reward)||allItems()[0];
 const fmtT=iso=>{const d=new Date(iso);return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`};
 function stampCard(x,dark){const g=SHOP.goal,on=Math.min(x.points,g),times=Math.floor(x.points/g);
@@ -600,7 +689,7 @@ function renderAdmin(){
   const dates=SHOP.closedDates.slice().sort();
   const booked=d=>load().filter(b=>isActive(b)&&b.date===d).length;
   const ax=adminPhone&&getMember(adminPhone);
-  const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],...(F.member?[["member","會員集點"]]:[]),["wallet","儲值會員"],["cards","燙染紀錄卡"],["export","匯出紀錄"],["set","店家設定"]];
+  const tabs=[["cal","預約行事曆"],["phone","新增電話預約"],["price","價目設定"],...(F.member?[["member","會員集點"]]:[]),["wallet","儲值會員"],["cards","燙染紀錄卡"],["export","匯出紀錄"],["set","店家設定"]];
   const sub=`<div class="subtabs">${tabs.map(([k,n])=>`<button class="chip" data-atab="${k}" aria-pressed="${adminTab===k}">${n}</button>`).join("")}${soundChip()}${CLOUD?`<button class="chip" data-signout>登出</button>`:""}</div>`;
   let body;
   if(adminTab==="cal")body=calHTML();
@@ -608,6 +697,7 @@ function renderAdmin(){
   else if(adminTab==="wallet")body=walletHTML();
   else if(adminTab==="cards")body=cardsHTML();
   else if(adminTab==="export")body=exportHTML();
+  else if(adminTab==="price")body=priceHTML();
   else if(adminTab==="member")body=`${F.member?`<h2 class="sec">會員集點</h2><p class="sec-note">客人結帳時輸入手機號碼，幫他蓋點或兌換贈品。</p>
   <form id="af" novalidate><div style="display:flex;gap:8px"><input class="t" id="a-phone" type="tel" inputmode="numeric" placeholder="會員手機號碼" value="${adminPhone||""}" style="flex:1;min-width:0"><button class="btn" type="submit">查詢</button></div></form>
   ${adminPhone&&!ax?`<p class="err">查不到這支號碼的會員。</p>`:""}
@@ -634,13 +724,19 @@ function renderAdmin(){
     ${booked(d)?`<p class="err">這天已有 ${booked(d)} 筆預約，請記得聯絡客人改期。</p>`:""}</div>`).join(""):`<p class="sec-note">目前沒有指定休假日。</p>`}</div>
   <p class="fine">設定後，客人在「預約時間」頁看到該日期會顯示「公休」，無法預約。</p>
   ${plansHTML()}
+  ${isOwner()||!CLOUD?`<h2 class="sec">LINE 登入（客人收預約結果通知）</h2><p class="sec-note">貼上 LINE Developers 裡 LIFF 應用程式的「LIFF ID」。填了之後客人送出預約前要先用 LINE 登入，店家確認或婉拒時會自動傳 LINE 通知客人；留空就不需要登入。</p>
+  <form id="liff-f" novalidate><div style="display:flex;gap:8px"><input class="t" id="liff-id" placeholder="例：2001234567-AbCdEfGh" value="${esc(LIFF_ID)}" style="flex:1;min-width:0"><button class="btn" type="submit">儲存</button></div></form>`:""}
   ${adminsHTML()}
   <div class="actions"><button class="btn ghost" data-go="menu">回價目表</button></div>`;
   $("#v-admin").innerHTML=sub+body;drawQRs($("#v-admin"));
 }
 let adminPhone=null,adminRedeem=false,adminFlash="";
 let adminTab="cal",calMonth=0,calDay=ymd(new Date()),adminAct=null,phoneMsg="",phoneErr="";
-const ST={pending:["待確認","past"],booked:["待確認","past"],confirmed:["已確認","on"],cancelled:["已取消","off"]};
+const ST={pending:["待確認","past"],booked:["待確認","past"],confirmed:["已確認","on"],cancelled:["已取消","off"],declined:["已婉拒","off"]};
+let adminDur=null,adminRec=null;
+const selfTxt=x=>[x.permDate||x.permAmt?`上次燙 ${x.permDate||""}${x.permAmt?" "+money(x.permAmt):""}`:"",x.dyeDate||x.dyeAmt?`上次染 ${x.dyeDate||""}${x.dyeAmt?" "+money(x.dyeAmt):""}`:""].filter(Boolean).join("；");
+const DUR_OPTS=[30,60,90,120,150,180,210,240,270,300,360];
+const durSel=(id,v,auto)=>`<select class="t" id="${id}">${auto?`<option value="">${auto}</option>`:""}${[...new Set([...DUR_OPTS,...(v&&!auto?[v]:[])])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m===v&&!auto?"selected":""}>${durText(m)}</option>`).join("")}</select>`;
 function calHTML(){
   const now=new Date(),base=new Date(now.getFullYear(),now.getMonth()+calMonth,1),y=base.getFullYear(),m=base.getMonth();
   const first=base.getDay(),dim=new Date(y,m+1,0).getDate(),all=load(),today=ymd(now);
@@ -658,14 +754,23 @@ function calHTML(){
   <p class="legend">數字是當天預約筆數：<i class="dc">2</i> 已確認　<i class="dp">1</i> 待確認</p>
   <h2 class="sec">${fmtDate(calDay)}${isClosed(dd,calDay)?"・公休":""}</h2>
   <div class="list">${day.length?day.map(b=>{const [sl,sc]=ST[b.status]||ST.pending,act=isActive(b)&&!isPast(b.date,b.time);
-    return `<div class="card bk ${b.status==="cancelled"?"dim":""}"><div class="row"><span class="name">${b.time}　${esc(b.name)}</span><span class="status ${sc}">${sl}</span></div>
-    <p class="meta">${b.phone}・${b.source==="phone"?"電話預約":"線上預約"}・代碼 ${b.code}</p>
+    const k=bkey(b),dur=b.dur||SHOP.step;
+    return `<div class="card bk ${isActive(b)?"":"dim"}"><div class="row"><span class="name">${b.time}–${addMin(b.time,dur)}　${esc(b.name)}</span><span class="status ${sc}">${sl}</span></div>
+    <p class="meta">${b.phone}・${b.source==="phone"?"電話預約":"線上預約"}・代碼 ${b.code}${b.source!=="phone"?(b.lineUid?"・LINE 已綁定":"・未綁 LINE"):""}</p>
     <p class="meta">${b.items.map(i=>esc(i.name)).join("、")||"未指定項目"}${b.note?`・${esc(b.note)}`:""}</p>
-    ${act?(adminAct&&adminAct.key===bkey(b)?`<div class="confirm">${adminAct.type==="decline"?"確定婉拒這筆預約？":"確定取消這筆預約？"}時段會重新開放。<div class="actions"><button class="btn danger" data-ayes="${bkey(b)}">確定</button><button class="btn ghost" data-ano>先不要</button></div></div>`
+    <p class="meta">鎖定 ${durText(dur)}${act?` <button class="chip" data-adur="${k}">調整時間</button>`:""}${b.status!=="cancelled"&&b.status!=="declined"?` <button class="chip" data-arec="${k}">填燙染紀錄</button>`:""}</p>
+    ${b.self?`<p class="meta" style="color:var(--gold)">客人自填：${esc(selfTxt(b.self))}</p>`:""}
+    ${adminDur===k?`<div class="confirm">這筆預約要鎖住多久？${durSel("adur-sel",dur)}<div class="actions"><button class="btn" data-adur-save="${k}">儲存</button><button class="btn ghost" data-adur-no>取消</button></div></div>`:""}
+    ${adminRec===k?`<form id="c-rec" data-key="${k}" class="confirm" novalidate><b>燙染紀錄</b>（存到這位客人的燙染紀錄卡）
+      <label class="f" for="r-date">日期</label><input class="t" id="r-date" type="date" value="${b.date}">
+      <div class="two"><div><label class="f" for="r-pamt">燙髮金額</label><input class="t" id="r-pamt" type="number" inputmode="numeric" min="0"></div><div><label class="f" for="r-damt">染髮金額</label><input class="t" id="r-damt" type="number" inputmode="numeric" min="0"></div></div>
+      <label class="f" for="r-note">備註（選填）</label><input class="t" id="r-note" placeholder="例：染膏 7/0、冷燙 25 分">
+      <div class="actions"><button class="btn" type="submit">儲存紀錄</button><button class="btn ghost" type="button" data-arec-no>取消</button></div></form>`:""}
+    ${act?(adminAct&&adminAct.key===k?`<div class="confirm">${adminAct.type==="decline"?"確定婉拒這筆預約？":"確定取消這筆預約？"}時段會重新開放。<div class="actions"><button class="btn danger" data-ayes="${bkey(b)}">確定</button><button class="btn ghost" data-ano>先不要</button></div></div>`
       :`<div class="actions">${b.status!=="confirmed"?`<button class="btn" data-aconfirm="${bkey(b)}">確認預約</button><button class="btn ghost" data-adecline="${bkey(b)}">婉拒</button>`:`<button class="btn ghost" data-acancel="${bkey(b)}">取消預約</button>`}</div>`):""}
     </div>`}).join(""):`<p class="sec-note">這天還沒有預約。</p>`}</div>
   <div class="actions"><button class="btn" data-atab="phone">在這天新增電話預約</button></div>
-  ${isClosed(dd,calDay)?"":(()=>{const bl=(SHOP.blocked||{})[calDay]||[],act=all.filter(b=>isActive(b)&&b.date===calDay).map(b=>b.time),ts=slotsOf().filter(t=>!isPast(calDay,t));
+  ${isClosed(dd,calDay)?"":(()=>{const bl=(SHOP.blocked||{})[calDay]||[],o=occ(calDay),act=Object.keys(o),ts=slotsOf().filter(t=>!isPast(calDay,t));
     return `<h2 class="sec" style="font-size:18px">關閉時段</h2><p class="sec-note">現場客人或其他服務佔用的時間，點一下關閉，客人就不能選；再點一下重新開放。${bl.length?`目前關閉 ${bl.length} 個時段。`:""}</p>
     ${ts.length?`<div class="chips">${ts.map(t=>act.includes(t)&&!bl.includes(t)?`<button class="chip" disabled style="opacity:.45">${t} 已預約</button>`:`<button class="chip" data-blk="${t}" aria-pressed="${bl.includes(t)}">${bl.includes(t)?"✕ ":""}${t}</button>`).join("")}</div>`:`<p class="sec-note">這天已經沒有可以設定的時段。</p>`}`})()}`;
 }
@@ -677,12 +782,50 @@ function phoneHTML(){
     <label class="f" for="p-phone">手機號碼</label><input class="t" id="p-phone" type="tel" inputmode="numeric" placeholder="0912345678">
     <label class="f" for="p-date">日期</label><input class="t" id="p-date" type="date" min="${ymd(new Date())}" value="${calDay>=ymd(new Date())?calDay:ymd(new Date())}">
     <label class="f" for="p-time">時間</label><select class="t" id="p-time">${slotsOf().map(t=>`<option>${t}</option>`).join("")}</select>
-    <label class="f" for="p-item">服務項目</label><select class="t" id="p-item"><option value="">未指定（到店再決定）</option>${items.map(i=>`<option value="${i.id}">${esc(i.name)}（${money(i.price)}${i.up?" 起":""}）</option>`).join("")}</select>
+    <label class="f" for="p-item">服務項目</label><select class="t" id="p-item"><option value="">未指定（到店再決定）</option>${items.map(i=>`<option value="${i.id}">${esc(i.name)}（${money(i.price)}${i.up?" 起":""}・${durText(durOf([i]))}）</option>`).join("")}</select>
+    <label class="f" for="p-dur">鎖定時間</label>${durSel("p-dur",0,"依服務項目（未指定為 1 小時）")}
     <label class="f" for="p-note">備註（選填）</label><textarea class="t" id="p-note" placeholder="例：髮長及腰、要加購肩頸按摩"></textarea>
     ${phoneErr?`<p class="err">${phoneErr}</p>`:""}${phoneMsg?`<p class="meta" style="color:var(--ok)">${phoneMsg}</p>`:""}
     <div class="actions"><button class="btn" type="submit">登記預約</button></div>
   </form>`;
 }
+/* ===== 價目設定：網站和 LINE 自動回覆共用這一份；dur 是預約時要鎖住的時間 ===== */
+let mEdit=null,mMsg="",mErr="",mBusy=false;
+const M_TITLE={wash:"洗護方案",care:"髮膜護髮（依髮長）",perm:"燙髮",dye:"染髮",addon:"加購"},M_PRE={wash:"w",care:"c",perm:"p",dye:"d",addon:"a"};
+const M_DUR=[0,15,20,30,45,60,90,120,150,180,210,240,300,360];
+function priceHTML(){if(!mEdit)mEdit=JSON.parse(JSON.stringify(menuToDb()));
+  const durOpt=(k,i,v)=>`<select class="t" data-mf="${k}|${i}|dur">${[...new Set([...M_DUR,v||0])].sort((a,b)=>a-b).map(m=>`<option value="${m}" ${m===(v||0)?"selected":""}>${m?durText(m):"不另外占時間"}</option>`).join("")}</select>`;
+  const incTxt=l=>(l||[]).map(o=>o.n+(o.m?" "+o.m:"")).join("\n");
+  return `<h2 class="sec">價目設定</h2><p class="sec-note">這裡改完按「儲存價目表」，網站價目表和 LINE 自動回覆會一起更新。「預約時間」是客人選了這個項目要鎖住多久，多個項目會加總，以 30 分鐘為單位。</p>
+  ${MENU_KEYS.map(k=>`<h2 class="sec" style="font-size:18px">${M_TITLE[k]}</h2><div class="list">${mEdit[k].map((x,i)=>`<div class="card">
+    <label class="f">名稱</label><input class="t" data-mf="${k}|${i}|name" value="${esc(x.name||"")}">
+    ${k==="care"?`<label class="f">價格（短髮／中長／長髮／特長）</label><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${[0,1,2,3].map(j=>`<input class="t" type="number" inputmode="numeric" min="0" data-mf="${k}|${i}|prices.${j}" value="${(x.prices||[])[j]||0}">`).join("")}</div>`
+      :`<div class="two"><div><label class="f">價格</label><input class="t" type="number" inputmode="numeric" min="0" data-mf="${k}|${i}|price" value="${x.price||0}"></div><div><label class="f">預約時間</label>${durOpt(k,i,x.dur)}</div></div>`}
+    ${k==="care"?`<label class="f">預約時間</label>${durOpt(k,i,x.dur)}`:""}
+    ${k==="perm"||k==="dye"||k==="addon"?`<label class="chk"><input type="checkbox" data-mf="${k}|${i}|up" ${x.up?"checked":""}> 起價（顯示「起」，實際以現場評估為準）</label>`:""}
+    ${k==="dye"?`<label class="f">說明（選填）</label><input class="t" data-mf="${k}|${i}|desc" value="${esc(x.desc||"")}">`:""}
+    ${k==="wash"||k==="care"?`<label class="f">內容（一行一項，後面可加分鐘數，例：舒壓洗 15）</label><textarea class="t" data-mf="${k}|${i}|inc" rows="4">${esc(incTxt(x.inc))}</textarea>`:""}
+    <div class="actions"><button class="chip" data-mdel="${k}|${i}">刪除這個項目</button></div></div>`).join("")}</div>
+    <div class="actions"><button class="btn ghost" data-madd="${k}">＋ 新增${M_TITLE[k].replace(/（.*/,"")}項目</button></div>`).join("")}
+  <div style="position:sticky;bottom:0;background:var(--bg);padding:10px 0">${mErr?`<p class="err">${mErr}</p>`:""}${mMsg?`<p class="meta" style="color:var(--ok)">${mMsg}</p>`:""}
+  <div class="actions"><button class="btn" data-msave ${mBusy?"disabled":""}>${mBusy?"儲存中…":"儲存價目表"}</button><button class="btn ghost" data-mreset>放棄修改</button></div></div>`}
+function mSet(path,el){const [k,i,f]=path.split("|"),x=mEdit[k][+i];if(!x)return;
+  if(f==="up")x.up=el.checked;
+  else if(f==="price"||f==="dur")x[f]=Math.max(0,Math.round(+el.value||0));
+  else if(f.startsWith("prices.")){x.prices=x.prices||[0,0,0,0];x.prices[+f.slice(7)]=Math.max(0,Math.round(+el.value||0))}
+  else if(f==="inc")x.inc=el.value.split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{const m=l.match(/^(.*?)\s+(\d{1,3})\s*分?$/);return m?{n:m[1],m:+m[2]}:{n:l}});
+  else x[f]=el.value.slice(0,40);mMsg=""}
+$("#v-admin").addEventListener("input",e=>{const p=e.target.dataset&&e.target.dataset.mf;if(p)mSet(p,e.target)});
+$("#v-admin").addEventListener("change",e=>{const p=e.target.dataset&&e.target.dataset.mf;if(p)mSet(p,e.target)});
+$("#v-admin").addEventListener("click",async e=>{const t=e.target.closest("button");if(!t)return;const d=t.dataset,y=window.scrollY,re=()=>{renderAdmin();window.scrollTo(0,y)};
+  if(d.madd){const k=d.madd,x={id:M_PRE[k]+Date.now().toString(36),name:"",dur:k==="addon"?15:60};if(k==="care"){x.prices=[0,0,0,0];x.inc=[];x.ext=[]}else x.price=0;if(k==="wash")x.inc=[];mEdit[k].push(x);mMsg=mErr="";re();return}
+  if(d.mdel){const [k,i]=d.mdel.split("|");mEdit[k].splice(+i,1);mMsg=mErr="";re();return}
+  if(d.mreset!==undefined){mEdit=null;mMsg=mErr="";re();return}
+  if(d.msave!==undefined){mErr="";for(const k of MENU_KEYS)for(const x of mEdit[k]){x.name=(x.name||"").trim();if(!x.name){mErr=`「${M_TITLE[k]}」有項目還沒填名稱。`;return re()}}
+    if(!mEdit.wash.length){mErr="洗護方案至少要有一個項目。";return re()}
+    mBusy=true;re();try{await fdb.collection("config").doc("menu").set({...mEdit,updatedAt:new Date().toISOString()});mMsg="已儲存，網站和 LINE 自動回覆都已更新。";mEdit=null}
+    catch(er){console.warn(er);mErr="儲存失敗，請檢查網路。"}mBusy=false;re()}});
+
 /* 用預約編號找人：代碼只有兩位數，過去的預約可能用過同一個代碼 */
 const bkey=b=>b.id||(b.code+"_"+b.date+"_"+b.time);
 function setStatus(key,st){const b=load().find(x=>bkey(x)===key&&isActive(x));if(b)changeStatus(b,st).then(()=>{if(!CLOUD)renderAdmin()}).catch(er=>{console.warn(er);adminFlash="更新失敗，請檢查網路。";renderAdmin()})}
@@ -702,7 +845,7 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.admrmNo!==undefined){admRm=null;re();return}
   if(t.dataset.admrmYes){const em=t.dataset.admrmYes;t.disabled=true;
     fdb.collection("admins").doc(em).delete().then(()=>{admins=admins.filter(a=>a.email!==em);admMsg="已移除。"}).catch(er=>{console.warn(er);admErr="移除失敗，請檢查網路。"}).finally(()=>{admRm=null;re()});return}
-  if(t.dataset.atab){if(t.dataset.atab==="wallet"&&adminTab!=="wallet"){wList=null;wPanel=wSel?wPanel:null}if(t.dataset.atab==="cards"&&adminTab!=="cards"){cList=null;cMode=null;cMsg=cErr=""}adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
+  if(t.dataset.atab){if(t.dataset.atab==="price"&&adminTab!=="price"){mEdit=null;mMsg=mErr=""}if(t.dataset.atab==="wallet"&&adminTab!=="wallet"){wList=null;wPanel=wSel?wPanel:null}if(t.dataset.atab==="cards"&&adminTab!=="cards"){cList=null;cMode=null;cMsg=cErr=""}adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
   if(t.dataset.cmon){calMonth+=+t.dataset.cmon;re();return}
   if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
   if(t.dataset.blk){const a=(SHOP.blocked=SHOP.blocked||{})[calDay]=(SHOP.blocked[calDay]||[]).slice(),i=a.indexOf(t.dataset.blk);i<0?a.push(t.dataset.blk):a.splice(i,1);a.sort();saveSettings();re();return}
@@ -710,7 +853,13 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
   if(t.dataset.adecline){adminAct={key:t.dataset.adecline,type:"decline"};re();return}
   if(t.dataset.acancel){adminAct={key:t.dataset.acancel,type:"cancel"};re();return}
   if(t.dataset.ano!==undefined){adminAct=null;re();return}
-  if(t.dataset.ayes){setStatus(t.dataset.ayes,"cancelled");adminAct=null;re();return}
+  if(t.dataset.ayes){setStatus(t.dataset.ayes,adminAct&&adminAct.type==="decline"?"declined":"cancelled");adminAct=null;re();return}
+  if(t.dataset.adur){adminDur=adminDur===t.dataset.adur?null:t.dataset.adur;adminRec=null;re();return}
+  if(t.dataset.adurNo!==undefined){adminDur=null;re();return}
+  if(t.dataset.adurSave){const b=load().find(x=>bkey(x)===t.dataset.adurSave),dur=+$("#adur-sel").value;adminDur=null;
+    if(b){const clash=!canStart(b.date,b.time,dur,bkey(b));changeDur(b,dur).then(()=>flashMsg(clash?"已儲存。注意：和其他預約或關閉的時段重疊了。":"已改成鎖定 "+durText(dur)+"。")).catch(er=>{console.warn(er);flashMsg("更新失敗，請檢查網路。")})}re();return}
+  if(t.dataset.arec){adminRec=adminRec===t.dataset.arec?null:t.dataset.arec;adminDur=null;re();return}
+  if(t.dataset.arecNo!==undefined){adminRec=null;re();return}
   if(t.dataset.paytoggle){const id=t.dataset.paytoggle,a=SHOP.pay;
     if(a.includes(id)){if(a.length===1){const er=$("#pay-err");er.textContent="至少要保留一種付款方式。";er.hidden=false;return}a.splice(a.indexOf(id),1)}else a.push(id);
     SHOP.pay=PAYS.map(p=>p[0]).filter(x=>a.includes(x));saveSettings();renderAdmin();return}
@@ -727,17 +876,19 @@ $("#v-admin").addEventListener("submit",async e=>{if(/^[wcx]-/.test(e.target.id)
   if(e.target.id==="pf"){phoneMsg=phoneErr="";
     const name=$("#p-name").value.trim(),phone=$("#p-phone").value.replace(/\D/g,""),date=$("#p-date").value,time=$("#p-time").value,note=$("#p-note").value.trim();
     const it=allItems().find(i=>i.id===$("#p-item").value);
-    const keep=()=>{const v={n:name,p:$("#p-phone").value,d:date,t:time,i:$("#p-item").value,o:note};renderAdmin();$("#p-name").value=v.n;$("#p-phone").value=v.p;$("#p-date").value=v.d;$("#p-time").value=v.t;$("#p-item").value=v.i;$("#p-note").value=v.o};
+    const dur=+$("#p-dur").value||(it?durOf([it]):60);
+    const keep=()=>{const v={n:name,p:$("#p-phone").value,d:date,t:time,i:$("#p-item").value,o:note,u:$("#p-dur").value};renderAdmin();$("#p-name").value=v.n;$("#p-phone").value=v.p;$("#p-date").value=v.d;$("#p-time").value=v.t;$("#p-item").value=v.i;$("#p-note").value=v.o;$("#p-dur").value=v.u};
     if(!name){phoneErr="請填寫客人姓名。";return keep()}
     if(!/^09\d{8}$/.test(phone)){phoneErr="手機號碼請輸入 09 開頭的 10 位數字。";return keep()}
     if(!date){phoneErr="請選擇日期。";return keep()}
     if(isPast(date,time)){phoneErr="這個時間已經過了。";return keep()}
     if(isClosed(new Date(date+"T00:00:00"),date)){phoneErr="這天是公休日，要先到店家設定取消公休。";return keep()}
-    if(load().some(b=>b.status==="confirmed"&&b.date===date&&b.time===time)){phoneErr="這個時段已經有確認的預約了，請換一個時間。";return keep()}
-    const items=it?[{name:it.name,price:it.price,up:!!it.up}]:[];
-    const b={code:genCode(),name,phone,note,date,time,items,total:it?it.price:0,up:!!(it&&it.up),pay:null,status:"confirmed",source:"phone",createdAt:new Date().toISOString(),confirmedAt:new Date().toISOString()};
+    const ov=x=>{const m=t=>+t.slice(0,2)*60+ +t.slice(3);return m(x.time)<m(time)+dur&&m(time)<m(x.time)+(x.dur||SHOP.step)};
+    if(load().some(b=>b.status==="confirmed"&&b.date===date&&ov(b))){phoneErr="這段時間和已確認的預約重疊了，請換一個時間或縮短鎖定時間。";return keep()}
+    const items=it?[{id:it.id,name:it.name,price:it.price,up:!!it.up,dur:it.dur||0}]:[];
+    const b={code:genCode(),name,phone,note,date,time,dur,items,total:it?it.price:0,up:!!(it&&it.up),pay:null,status:"confirmed",source:"phone",createdAt:new Date().toISOString(),confirmedAt:new Date().toISOString()};
     const l=load();try{await addBooking(b)}catch(er){console.warn(er);phoneErr="網路不穩，沒有登記成功，請再試一次。";return keep()}calDay=date;
-    const others=l.filter(x=>x!==b&&(x.status==="pending"||x.status==="booked")&&x.date===date&&x.time===time).length;
+    const others=l.filter(x=>x!==b&&(x.status==="pending"||x.status==="booked")&&x.date===date&&ov(x)).length;
     phoneMsg=`已登記 ${fmtDate(date)} ${time} ${name}，預約代碼 ${b.code}。${others?`同時段還有 ${others} 筆線上預約待確認，記得到行事曆處理。`:""}`;
     renderAdmin();return}
   if(e.target.id==="adm"){admMsg=admErr="";const nm=$("#adm-name").value.trim().slice(0,20),ph=$("#adm-phone").value.replace(/\D/g,""),pw=$("#adm-pw").value,em=staffEmail(ph);
@@ -751,6 +902,7 @@ $("#v-admin").addEventListener("submit",async e=>{if(/^[wcx]-/.test(e.target.id)
       admMsg=existed?`已新增 ${esc(nm)}。這支號碼之前建過帳號，密碼沒有改變，請他用之前的密碼登入。`:`已新增 ${esc(nm)}，請告訴他用手機號碼 ${fmtPhone(ph)} 和你設的密碼登入。`}
     catch(er){admErr=er.message}
     admBusy=false;return re()}
+  if(e.target.id==="liff-f"){LIFF_ID=$("#liff-id").value.trim();saveSettings();flashMsg(LIFF_ID?"已儲存，客人重新整理網頁後就會要求 LINE 登入。":"已關閉 LINE 登入。");return}
   if(e.target.id==="af"){adminPhone=$("#a-phone").value.replace(/\D/g,"")||null;adminRedeem=false;adminFlash="";try{await fetchMember(adminPhone)}catch(er){console.warn(er)}renderAdmin();return}
   const v=$("#cd-date").value,err=$("#cd-err");
   if(!v){err.textContent="請先選擇日期。";err.hidden=false;return}
@@ -1027,9 +1179,11 @@ function shrinkPhoto(file){return new Promise((ok,no)=>{const img=new Image(),ur
 let cList=null,cSel=null,cVisits=null,cMode=null,cEditV=null,cQ="",cMsg="",cErr="",cBusy=false,cPhoto=undefined,cDelV=null,cWallet=null;
 const reC=()=>{if(view==="admin"&&adminTab==="cards"){const y=window.scrollY;renderAdmin();window.scrollTo(0,y)}};
 const radios=(name,opts,val)=>`<div class="chips">${opts.map(o=>`<label class="chip opt"><input type="radio" name="${name}" value="${esc(o)}" ${val===o?"checked":""}>${esc(o)}</label>`).join("")}</div>`;
-const vTxt=v=>[v.len&&`${esc(v.len)}髮`,v.cut==="有"&&"剪髮",v.damage&&`損傷：${esc(v.damage)}`,v.special==="有"&&"特別保養",v.pre&&"燙前保養",v.post&&"燙後保養",v.dye&&`染膏 ${esc(v.dye)}`,(v.t1||v.t2)&&`時間 ${[v.t1,v.t2].filter(Boolean).map(x=>esc(x)+"分").join("／")}`].filter(Boolean).join("・");
-async function openCard(id){cSel=null;cVisits=null;cMode=null;cWallet=null;cMsg=cErr="";cBusy=true;reC();
-  try{cSel=await getCard(id);if(!cSel)cErr="找不到這張紀錄卡。";else{cVisits=await getVisits(id);findWallets(cSel.phone).then(l=>{cWallet=l[0]||null;reC()}).catch(()=>{})}}
+const vTxt=v=>[v.permAmt&&`燙 ${money(v.permAmt)}`,v.dyeAmt&&`染 ${money(v.dyeAmt)}`,v.len&&`${esc(v.len)}髮`,v.cut==="有"&&"剪髮",v.damage&&`損傷：${esc(v.damage)}`,v.special==="有"&&"特別保養",v.pre&&"燙前保養",v.post&&"燙後保養",v.dye&&`染膏 ${esc(v.dye)}`,(v.t1||v.t2)&&`時間 ${[v.t1,v.t2].filter(Boolean).map(x=>esc(x)+"分").join("／")}`].filter(Boolean).join("・");
+let cSelf=null;
+async function openCard(id){cSel=null;cVisits=null;cMode=null;cWallet=null;cSelf=null;cMsg=cErr="";cBusy=true;reC();
+  try{cSel=await getCard(id);if(!cSel)cErr="找不到這張紀錄卡。";else{cVisits=await getVisits(id);
+    if(CLOUD&&cSel.phone)fdb.collection("bookings").where("phone","==",cSel.phone).get().then(q=>{const l=q.docs.map(d=>d.data()).filter(b=>b.self).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));cSelf=l[0]?{...l[0].self,at:l[0].createdAt}:null;reC()}).catch(()=>{});findWallets(cSel.phone).then(l=>{cWallet=l[0]||null;reC()}).catch(()=>{})}}
   catch(e){console.warn(e);cErr="讀取失敗，請確認安全規則已更新。"}cBusy=false;reC()}
 function cardsHTML(){const msgs=`${cErr?`<p class="err">${cErr}</p>`:""}${cMsg?`<p class="notice" style="color:var(--ok)">${cMsg}</p>`:""}`;
   if(cMode==="info"||(cMode==="new"&&!cSel))return cardInfoForm(cMode==="new"?{}:cSel);
@@ -1046,6 +1200,9 @@ function cardsHTML(){const msgs=`${cErr?`<p class="err">${cErr}</p>`:""}${cMsg?`
   <div class="card"><div class="row"><span class="name">${esc(c.name||"（未填姓名）")}</span><button class="chip" data-cinfo>修改資料</button></div>
     <p class="meta">${[c.no&&"卡號 "+esc(c.no),c.gender&&esc(c.gender),c.phone&&fmtPhone(c.phone),c.tel&&"電話 "+esc(c.tel),c.birthday&&"生日 "+esc(c.birthday)].filter(Boolean).join("・")}</p>${c.address?`<p class="meta">${esc(c.address)}</p>`:""}
     ${cWallet?`<p class="meta">儲值餘額 ${money(cWallet.balance||0)}　<button class="chip" data-cwallet="${cWallet.tk}">查看儲值</button></p>`:""}
+    ${(()=>{const lp=(cVisits||[]).find(v=>v.permAmt>0),ld=(cVisits||[]).find(v=>v.dyeAmt>0);
+      return `<h3 class="sub">燙染摘要</h3><ul class="sum"><li><span>最近燙髮</span><span>${lp?`${fmtT(lp.date)}・${money(lp.permAmt)}`:"—"}</span></li><li><span>最近染髮</span><span>${ld?`${fmtT(ld.date)}・${money(ld.dyeAmt)}`:"—"}</span></li>
+        ${cSelf?`<li><span>客人自填</span><span>${esc(selfTxt(cSelf))}</span></li>`:""}</ul>`})()}
     <h3 class="sub">髮質分析</h3>${hairRows?`<ul class="sum">${hairRows}</ul>`:`<p class="sec-note" style="margin:0">尚未填寫，按「修改資料」填寫。</p>`}</div>
   <div class="actions"><button class="btn" data-cvisit>＋ 新增服務紀錄</button></div>
   <h2 class="sec" style="font-size:17px">服務紀錄</h2>
@@ -1075,7 +1232,8 @@ function visitForm(){const v=cEditV?cVisits.find(x=>x.vid===cEditV)||{}:{date:ym
   <div class="two"><div><label class="f" for="cv-date">日期</label><input class="t" id="cv-date" type="date" value="${esc(v.date||"")}"></div><div><label class="f" for="cv-des">設計師</label><input class="t" id="cv-des" value="${esc(v.designer||"")}" list="cv-staff"></div></div>
   <datalist id="cv-staff">${(admins||[]).map(a=>a.name?`<option value="${esc(a.name)}">`:"").join("")}</datalist>
   <label class="f">長短</label>${radios("cv-len",["長","普通","短"],v.len)}
-  <label class="f" for="cv-amt">消費金額</label><input class="t" id="cv-amt" type="number" inputmode="numeric" min="0" value="${v.amount||""}">
+  <div class="two"><div><label class="f" for="cv-pamt">燙髮金額</label><input class="t" id="cv-pamt" type="number" inputmode="numeric" min="0" value="${v.permAmt||""}"></div><div><label class="f" for="cv-damt">染髮金額</label><input class="t" id="cv-damt" type="number" inputmode="numeric" min="0" value="${v.dyeAmt||""}"></div></div>
+  <label class="f" for="cv-amt">消費總金額</label><input class="t" id="cv-amt" type="number" inputmode="numeric" min="0" value="${v.amount||""}" placeholder="留空會自動用燙＋染金額">
   <div class="two"><div><label class="f">剪髮</label>${radios("cv-cut",["有","無"],v.cut)}</div><div><label class="f">特別保養</label>${radios("cv-sp",["有","無"],v.special)}</div></div>
   <label class="f">損傷</label>${radios("cv-dmg",["全體","毛尾","分叉","好"],v.damage)}
   <label class="f">時間（分鐘）</label><div class="two"><input class="t" id="cv-t1" inputmode="numeric" placeholder="1." value="${esc(v.t1||"")}"><input class="t" id="cv-t2" inputmode="numeric" placeholder="2." value="${esc(v.t2||"")}"></div>
@@ -1110,6 +1268,14 @@ $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if
 $("#v-admin").addEventListener("submit",async e=>{const id=e.target.id;if(!id.startsWith("c-"))return;e.preventDefault();
   const fail=m=>keepFormC(()=>{cErr=m;cBusy=false;renderAdmin()});
   if(id==="c-q"){cQ=$("#cq").value;reC();return}
+  if(id==="c-rec"){const b=load().find(x=>bkey(x)===e.target.dataset.key);if(!b)return;
+    const date=$("#r-date").value,n=s=>Math.max(0,Math.round(+$(s).value||0)),permAmt=n("#r-pamt"),dyeAmt=n("#r-damt"),note=$("#r-note").value.trim().slice(0,200);
+    if(!date)return flashMsg("請選擇日期。");if(!permAmt&&!dyeAmt)return flashMsg("請填燙髮或染髮金額。");
+    const btn=e.target.querySelector("[type=submit]");btn.disabled=true;btn.textContent="儲存中…";
+    try{const l=await listCards();let c=l.find(x=>x.phone===b.phone);const cid=c?c.id:await saveCard(null,{name:b.name,phone:b.phone});
+      await saveVisit(cid,null,{date,permAmt,dyeAmt,amount:permAmt+dyeAmt,note:[note,`預約代碼 ${b.code}：${(b.items||[]).map(i=>i.name).join("、")}`].filter(Boolean).join("\n")});
+      adminRec=null;cList=null;flashMsg(`已存到 ${b.name} 的燙染紀錄卡。`);renderAdmin()}
+    catch(er){console.warn(er);btn.disabled=false;btn.textContent="儲存紀錄";flashMsg("儲存失敗，請檢查網路。")}return}
   if(id==="c-info"){const g=s=>$(s).value.trim(),phone=g("#ci-phone").replace(/\D/g,"");
     const data={name:g("#ci-name").slice(0,20),no:g("#ci-no").slice(0,20),gender:radioVal("ci-gender"),phone,tel:g("#ci-tel").slice(0,20),birthday:g("#ci-bd"),address:g("#ci-addr").slice(0,80),
       hair:{...Object.fromEntries(HAIR.map(([k])=>[k,radioVal("ch-"+k)])),side:[...document.querySelectorAll('#v-admin input[name="ch-side"]:checked')].map(x=>x.value),liquid:g("#ch-liquid").slice(0,60)}};
@@ -1119,7 +1285,8 @@ $("#v-admin").addEventListener("submit",async e=>{const id=e.target.id;if(!id.st
     try{const cid=await saveCard(cSel&&cSel.id,data);cBusy=false;cMode=null;cList=null;await openCard(cid);cMsg="已儲存。";reC()}catch(er){console.warn(er);fail("儲存失敗，請檢查網路，或確認安全規則已更新。")}return}
   if(id==="c-visit"){const g=s=>$(s).value.trim(),date=g("#cv-date");if(!date)return fail("請選擇日期。");
     const old=cEditV?cVisits.find(x=>x.vid===cEditV)||{}:{};
-    const data={date,designer:g("#cv-des").slice(0,20),len:radioVal("cv-len"),amount:Math.max(0,Math.round(Number(g("#cv-amt"))||0)),cut:radioVal("cv-cut"),special:radioVal("cv-sp"),damage:radioVal("cv-dmg"),
+    const amt=n=>Math.max(0,Math.round(Number(g(n))||0)),permAmt=amt("#cv-pamt"),dyeAmt=amt("#cv-damt");
+    const data={date,designer:g("#cv-des").slice(0,20),len:radioVal("cv-len"),permAmt,dyeAmt,amount:amt("#cv-amt")||permAmt+dyeAmt,cut:radioVal("cv-cut"),special:radioVal("cv-sp"),damage:radioVal("cv-dmg"),
       t1:g("#cv-t1").slice(0,6),t2:g("#cv-t2").slice(0,6),pre:$("#cv-pre").checked,post:$("#cv-post").checked,dye:g("#cv-dye").slice(0,40),note:g("#cv-note").slice(0,300),call:g("#cv-call").slice(0,300),
       photo:cPhoto!==undefined?(cPhoto||""):(old.photo||"")};
     keepFormC(()=>{cBusy=true;cErr="";renderAdmin()});
@@ -1140,16 +1307,16 @@ const localDT=iso=>{if(!iso)return "";const d=new Date(iso);return `${ymd(d)} ${
 async function doExport(kind){const from=xFrom,to=xTo,inR=d=>d>=from&&d<=to;let rows,name;
   if(kind==="bookings"){let l;if(CLOUD){const q=await fdb.collection("bookings").where("date",">=",from).where("date","<=",to).get();l=q.docs.map(d=>d.data())}else l=load().filter(b=>inR(b.date));
     l.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-    rows=[["日期","時間","姓名","手機","服務項目","預估金額","付款方式","狀態","來源","預約代碼","備註","建立時間","確認時間","取消時間"],
-      ...l.map(b=>[b.date,b.time,b.name,fmtPhone(b.phone||""),(b.items||[]).map(i=>i.name).join("、"),b.total?b.total+(b.up?" 起":""):"",b.pay?payName(b.pay):"",(ST[b.status]||[b.status])[0],b.source==="phone"?"電話預約":"線上預約",b.code,b.note||"",localDT(b.createdAt),localDT(b.confirmedAt),localDT(b.cancelledAt)])];name="Bookings"}
+    rows=[["日期","時間","姓名","手機","服務項目","預估金額","付款方式","狀態","來源","預約代碼","備註","建立時間","確認時間","取消時間","客人自填燙染"],
+      ...l.map(b=>[b.date,b.time+"–"+addMin(b.time,b.dur||SHOP.step),b.name,fmtPhone(b.phone||""),(b.items||[]).map(i=>i.name).join("、"),b.total?b.total+(b.up?" 起":""):"",b.pay?payName(b.pay):"",(ST[b.status]||[b.status])[0],b.source==="phone"?"電話預約":"線上預約",b.code,b.note||"",localDT(b.createdAt),localDT(b.confirmedAt),localDT(b.cancelledAt||b.declinedAt),b.self?selfTxt(b.self):""])];name="Bookings"}
   else if(kind==="wallet"){const ws=await findWallets(null,true);rows=[["時間","會員","手機","類型","金額","贈品","異動後餘額","實收金額","付款方式","說明","經手人"]];const all=[];
     for(const w of ws){const logs=await getLogs(w.tk);logs.forEach(x=>{if(inR(ymd(new Date(x.t))))all.push([x.t,w,x])})}
     all.sort((a,b)=>a[0].localeCompare(b[0]));
     all.forEach(([t,w,x])=>rows.push([localDT(t),w.name,fmtPhone(w.phone||""),WT[x.type]||x.type,x.amount||"",(x.gifts||[]).map(g=>`${g.name} ${g.n>0?"+":""}${g.n}`).join("、"),x.amount||x.type==="topup"?x.balance:"",x.paid||"",x.pay?payName(x.pay):"",x.note||"",x.by||""]));name="StoredValue"}
-  else{const cs=await listCards();rows=[["日期","姓名","手機","設計師","長短","消費金額","剪髮","損傷","特別保養","時間1(分)","時間2(分)","燙前保養","燙後保養","染膏號碼","注意事項","電話訪談","有照片"]];const all=[];
+  else{const cs=await listCards();rows=[["日期","姓名","手機","設計師","長短","燙髮金額","染髮金額","消費金額","剪髮","損傷","特別保養","時間1(分)","時間2(分)","燙前保養","燙後保養","染膏號碼","注意事項","電話訪談","有照片"]];const all=[];
     for(const c of cs){(await getVisits(c.id)).forEach(v=>{if(inR(v.date))all.push([c,v])})}
     all.sort((a,b)=>a[1].date.localeCompare(b[1].date));
-    all.forEach(([c,v])=>rows.push([v.date,c.name,fmtPhone(c.phone||""),v.designer,v.len,v.amount||"",v.cut,v.damage,v.special,v.t1,v.t2,v.pre?"✓":"",v.post?"✓":"",v.dye,v.note,v.call,v.photo?"有":""]));name="PermDyeRecords"}
+    all.forEach(([c,v])=>rows.push([v.date,c.name,fmtPhone(c.phone||""),v.designer,v.len,v.permAmt||"",v.dyeAmt||"",v.amount||"",v.cut,v.damage,v.special,v.t1,v.t2,v.pre?"✓":"",v.post?"✓":"",v.dye,v.note,v.call,v.photo?"有":""]));name="PermDyeRecords"}
   download(`LingHair_${name}_${from}_to_${to}.csv`,rows);return rows.length-1}
 $("#v-admin").addEventListener("change",e=>{if(e.target.id==="x-from")xFrom=e.target.value;if(e.target.id==="x-to")xTo=e.target.value});
 $("#v-admin").addEventListener("click",async e=>{const t=e.target.closest("[data-xp]");if(!t)return;xMsg=xErr="";
