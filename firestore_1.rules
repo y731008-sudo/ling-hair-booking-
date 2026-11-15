@@ -1,0 +1,77 @@
+rules_version = '2';
+// 伶髮藝線上預約 Firestore 安全規則
+// 店家帳號：店主 Email 寫在 isOwner()；其他管理員由店主在後台「店家設定」新增
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 店主：可以在後台新增或移除管理員
+    function isOwner() {
+      return request.auth != null && request.auth.token.email in ['yoyo20121117@gmail.com'];
+    }
+    // 管理員：店主，或是店主在後台加進 admins 名單的人
+    function isAdmin() {
+      return isOwner() || (request.auth != null && request.auth.token.email is string
+        && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())));
+    }
+
+    // 管理員名單：文件編號是 Email（小寫）；管理員可讀，只有店主能新增或移除
+    match /admins/{email} {
+      allow read: if isAdmin();
+      allow write: if isOwner();
+    }
+
+    // 店家設定（公休日、付款方式）與價目表 config/menu：大家可讀，只有店家能改
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 完整預約資料（含姓名、電話）：只有店家能讀寫。
+    // 客人預約、查詢、取消都經過 Google Apps Script 後端（用店主帳號權限，並驗證手機＋代碼或 LINE 登入）
+    match /bookings/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // 空檔資料：只有日期、開始時間、所需時間、狀態，沒有姓名電話代碼，給客人判斷哪些時段可選；只有店家能改
+    match /avail/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // LINE 會員：文件編號是 LINE User ID；客人加入、查詢都經過 Apps Script 後端，只有店家能直接讀寫
+    match /lineMembers/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    // 舊版「用手機號碼雜湊找預約」的索引：已停用，只留給店家
+    match /lookup/{key} {
+      allow read, write: if isAdmin();
+    }
+
+    // 儲值會員卡：文件編號是隨機卡號，客人知道卡號才讀得到自己的卡；只有店家能開卡、儲值、扣款，不能刪除
+    match /wallets/{card} {
+      allow get: if true;
+      allow list, create, update: if isAdmin();
+      allow delete: if false;
+      // 儲值、扣款、使用贈品、調整紀錄：只能新增，任何人（包括店家）都不能修改或刪除
+      match /logs/{id} {
+        allow read: if true;
+        allow create: if isAdmin();
+        allow update, delete: if false;
+      }
+    }
+
+    // 燙染紀錄卡和每次服務紀錄：只有店家能看、能寫
+    match /cards/{id} {
+      allow read, write: if isAdmin();
+      match /visits/{v} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // 會員：文件編號是手機號碼雜湊；客人只能新建 0 點的會員，蓋點和兌換只有店家能做
+    // （集點功能目前關閉，只留給店家）
+    match /members/{key} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
