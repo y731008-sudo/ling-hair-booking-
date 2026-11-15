@@ -7,21 +7,27 @@
 <style>
 /* Layout: one phone-width column; dark espresso header like the LINE DM, cream menu cards, sticky bottom bar carrying the selection */
 :root{
-  --espresso:#2b1d16; --espresso-2:#3d2a1f; --gold:#b8894f; --gold-soft:#d9b98a;
-  --bg:#efe7dc; --card:#f8f3ec; --line:#ddd0bf; --ink:#2b1d16; --ink-2:#6d5a4b;
-  --on-dark:#f3e6d3; --ok:#4f7a4a; --danger:#a5452f;
+  /* 配色：柔玫瑰粉 */
+  --espresso:#b88e89; --espresso-2:#c49c97; --gold:#c4928a; --gold-soft:#fcece8;
+  --bg:#fbf5f3; --card:#fffdfc; --line:#f1e4e1; --ink:#5a4442; --ink-2:#9a807c;
+  --on-dark:#ffffff; --ok:#4f7a4a; --danger:#a5452f;
   --f-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
   --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --espresso:#1a120d; --espresso-2:#2a1d15; --gold:#d0a56b; --gold-soft:#e2c597;
-  --bg:#15100c; --card:#221913; --line:#3a2c22; --ink:#f0e4d4; --ink-2:#b5a08b;
+  --espresso:#3a2827; --espresso-2:#4a3331; --gold:#d6a39b; --gold-soft:#f0cfc9;
+  --bg:#1a1312; --card:#261c1b; --line:#3d2e2c; --ink:#f3e4e1; --ink-2:#bba09b;
   --on-dark:#f3e6d3; --ok:#86b07e; --danger:#e08a73; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --espresso:#1a120d; --espresso-2:#2a1d15; --gold:#d0a56b; --gold-soft:#e2c597;
-  --bg:#15100c; --card:#221913; --line:#3a2c22; --ink:#f0e4d4; --ink-2:#b5a08b;
+  --espresso:#3a2827; --espresso-2:#4a3331; --gold:#d6a39b; --gold-soft:#f0cfc9;
+  --bg:#1a1312; --card:#261c1b; --line:#3d2e2c; --ink:#f3e4e1; --ink-2:#bba09b;
   --on-dark:#f3e6d3; --ok:#86b07e; --danger:#e08a73; color-scheme:dark}
 *{box-sizing:border-box}
+/* 柔和配色：深底按鈕改白字、底部「選擇時間」改白底 */
+.chip[aria-pressed="true"],.date[aria-pressed="true"],.cday.sel,.chip.opt:has(input:checked){color:#fff!important}
+.chip[aria-pressed="true"] b{color:#fff!important}
+#bar-next{background:#fff!important;color:var(--espresso)!important;border-color:#fff!important}
+.card.sel .pick{color:#fff!important}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:20px;line-height:1.6}
 .wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:0 120px}
 header.top{background:var(--espresso);color:var(--on-dark);padding:22px 16px 0;text-align:center}
