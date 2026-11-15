@@ -526,13 +526,14 @@ async function initLine(){if(!lineOn())return;
   try{await liff.init({liffId:LIFF_ID});
     if(liff.isLoggedIn()){const p=await liff.getProfile();lineUser={name:p.displayName};
       try{const f=await liff.getFriendship();lineFriend=!!f.friendFlag}catch(e){}
-      try{lineMember=(await api("me",{idToken:liff.getIDToken()})).member||null}catch(e){console.warn(e);if(/過期/.test(e.message))lineExpired()}}}
+      if(!liff.getIDToken()){lineExpired();setTimeout(()=>flashMsg("請再按一次「用 LINE 加入會員」重新登入。"),800)}
+      else try{lineMember=(await api("me",{idToken:liff.getIDToken()})).member||null}catch(e){console.warn(e);if(/過期/.test(e.message)){lineExpired();setTimeout(()=>flashMsg("LINE 登入已過期，請再按一次登入。"),800)}}}}
   catch(e){console.warn("LINE 登入初始化失敗",e)}
   let st=null;try{st=JSON.parse(sessionStorage.getItem(PKEY)||"null");sessionStorage.removeItem(PKEY)}catch(e){}
   if(st&&st.sel){sel.wash=st.sel.wash||null;sel.care=Object.fromEntries(Object.entries(st.sel.care||{}).map(([k,v])=>[k,{len:v.len,ext:new Set()}]));
     sel.perm=new Set(st.sel.perm||[]);sel.dye=new Set(st.sel.dye||[]);sel.addon=new Set(st.sel.addon||[]);pickDate=st.pickDate;pickTime=st.pickTime;pickPay=st.pickPay;selfOpen=!!st.selfOpen;
     renderMenu();updateBar();lastBooking=null;go(st.v);if(st.v==="book"){setFormVals(st.form);fillMember()}if(st.v==="mine"&&lineUser)doLookup("line");return}
-  if(/[?&]join(=|%3D)1/.test(location.search)||(lineUser&&!lineMember&&view==="menu"&&!ADMIN_MODE)){go("book");if(lineMember)$("#v-book").innerHTML=joinedHTML();return}
+  if(/[?&]join(=|%3D)1/.test(location.search)||(needJoin()&&view==="menu"&&!ADMIN_MODE)){go("book");if(lineMember)$("#v-book").innerHTML=joinedHTML();return}
   if(view==="book"&&!lastBooking)keepForm(renderBook);if(view==="mine")renderMine()}
 /* 會員：自動帶入姓名、手機，可以按「修改」 */
 function fillMember(){if(!lineMember||!$("#f-name"))return;if(!$("#f-name").value)$("#f-name").value=lineMember.name||"";if(!$("#f-phone").value)$("#f-phone").value=lineMember.phone||""}
