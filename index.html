@@ -539,7 +539,7 @@ async function initLine(){if(!lineOn())return;
   if(st&&st.sel){sel.wash=st.sel.wash||null;sel.care=Object.fromEntries(Object.entries(st.sel.care||{}).map(([k,v])=>[k,{len:v.len,ext:new Set()}]));
     sel.perm=new Set(st.sel.perm||[]);sel.dye=new Set(st.sel.dye||[]);sel.addon=new Set(st.sel.addon||[]);pickDate=st.pickDate;pickTime=st.pickTime;pickPay=st.pickPay;selfOpen=!!st.selfOpen;
     renderMenu();updateBar();lastBooking=null;go(st.v);if(st.v==="book"){setFormVals(st.form);fillMember()}if(st.v==="mine"&&lineUser)doLookup("line");return}
-  if(/[?&]mine(=|%3D)1/.test(location.search)){go("mine");if(lineUser)doLookup("line");return}
+  if(/[?&]mine(=|%3D)1/.test(location.search)){go("mine");renderMine();if(lineUser)doLookup("line");return}
   if(/[?&]join(=|%3D)1/.test(location.search)||(needJoin()&&view==="menu"&&!ADMIN_MODE)){go("book");if(lineMember)$("#v-book").innerHTML=joinedHTML();return}
   if(view==="book"&&!lastBooking)keepForm(renderBook);if(view==="mine")renderMine()}
 /* 會員：自動帶入姓名、手機，可以按「修改」 */
