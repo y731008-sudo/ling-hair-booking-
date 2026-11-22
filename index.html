@@ -800,6 +800,7 @@ function renderAdmin(){
   ${isOwner()||!CLOUD?`<h2 class="sec">LINE 登入（客人收預約結果通知）</h2><p class="sec-note">貼上 LINE Developers 裡 LIFF 應用程式的「LIFF ID」。填了之後客人送出預約前要先用 LINE 登入，店家確認或婉拒時會自動傳 LINE 通知客人；留空就不需要登入。</p>
   <form id="liff-f" novalidate><div style="display:flex;gap:8px"><input class="t" id="liff-id" placeholder="例：2001234567-AbCdEfGh" value="${esc(LIFF_ID)}" style="flex:1;min-width:0"><button class="btn" type="submit">儲存</button></div></form>`:""}
   ${adminsHTML()}
+  ${notifyHTML()}
   <div class="actions"><button class="btn ghost" data-go="menu">回價目表</button></div>`;
   $("#v-admin").innerHTML=sub+body;drawQRs($("#v-admin"));
 }
@@ -862,6 +863,28 @@ function phoneHTML(){
     <div class="actions"><button class="btn" type="submit">登記預約</button></div>
   </form>`;
 }
+/* ===== 預約通知對象：店主固定收；其他人在 LINE 傳「綁定管理員 暗號」加入（Apps Script 寫進 notifyAdmins/{LINE ID}），暗號在 secure/notify，都只有店主看得到 ===== */
+let nfList=null,nfCode="",nfMsg="",nfErr="",nfRm=null;
+const nfNewCode=()=>String(100000+crypto.getRandomValues(new Uint32Array(1))[0]%900000);
+async function loadNotify(){try{const [q,c]=await Promise.all([fdb.collection("notifyAdmins").get(),fdb.collection("secure").doc("notify").get()]);
+  nfList=q.docs.map(d=>({uid:d.id,...d.data()})).sort((a,b)=>(a.createdAt||"").localeCompare(b.createdAt||""));
+  nfCode=(c.exists&&c.data().bindCode)||"";
+  if(!nfCode){const n=nfNewCode();await fdb.collection("secure").doc("notify").set({bindCode:n,updatedAt:new Date().toISOString()});nfCode=n}}
+  catch(e){console.warn(e);nfList=[];nfErr="通知對象讀取失敗，請確認安全規則已更新。"}}
+function notifyHTML(){if(!isOwner())return "";
+  const head=`<h2 class="sec">預約通知對象</h2><p class="sec-note">有新預約或客人取消時，LINE 官方帳號會傳通知給這些人。要加人：請對方先加「伶髮藝」LINE 好友，再把下面這句話傳給官方帳號。</p>`;
+  if(nfList===null){nfList=false;loadNotify().then(()=>{if(view==="admin"&&adminTab==="set")reAdmin()})}
+  if(!nfList)return head+`<p class="sec-note">讀取中…</p>`;
+  return head+`${nfCode?`<div class="card"><p style="margin:0">綁定管理員 <b style="font-size:20px;letter-spacing:2px">${esc(nfCode)}</b></p>
+    <p class="meta" style="margin:6px 0 0">暗號只給要收通知的人。如果外流，按「換暗號」舊暗號就失效，已經綁定的人不受影響。</p>
+    <div class="actions"><button class="chip" data-nfcopy>複製這句話</button><button class="chip" data-nfnew>換暗號</button></div></div>`:""}
+  <div class="list" style="margin-top:12px"><div class="card"><div class="row"><span class="name" style="font-size:16px">店主</span><span class="status on">固定收通知</span></div></div>
+  ${nfList.map(a=>`<div class="card"><div class="row"><span class="name" style="font-size:16px;word-break:break-all">${esc(a.lineName||"（沒有 LINE 名稱）")}</span>
+    <span style="display:flex;gap:6px;flex-shrink:0"><button class="chip" data-nftoggle="${esc(a.uid)}" aria-pressed="${a.on!==false}">${a.on!==false?"✓ 通知中":"已暫停"}</button><button class="chip" data-nfrm="${esc(a.uid)}">移除</button></span></div>
+    ${a.createdAt?`<p class="meta" style="margin:4px 0 0">${fmtT(a.createdAt)} 綁定</p>`:""}
+    ${nfRm===a.uid?`<div class="confirm">確定移除 ${esc(a.lineName||"這位")} 嗎？之後不會再收到預約通知，要恢復得重新傳暗號。<div class="actions"><button class="btn danger" data-nfrm-yes="${esc(a.uid)}">確定移除</button><button class="btn ghost" data-nfrm-no>先不要</button></div></div>`:""}</div>`).join("")}</div>
+  ${nfErr?`<p class="err">${nfErr}</p>`:""}${nfMsg?`<p class="meta" style="color:var(--ok)">${nfMsg}</p>`:""}
+  <p class="fine">對方傳暗號後，按「店家設定」重新整理就會出現。每多一位收通知的人，每則通知就多用一則 LINE 官方帳號的免費訊息額度。</p>`}
 /* ===== LINE 會員：客人用 LINE 加入，資料存在 lineMembers/{LINE ID}（只有店家看得到） ===== */
 let lmList=null,lmQ="";
 function lmHTML(){if(lmList===null){lmList=false;fdb.collection("lineMembers").get().then(q=>{lmList=q.docs.map(d=>d.data()).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));reAdmin()}).catch(e=>{console.warn(e);lmList=[];reAdmin()})}
@@ -922,12 +945,20 @@ $("#v-admin").addEventListener("change",e=>{
 });
 $("#v-admin").addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;
   const re=()=>{const y=window.scrollY;renderAdmin();window.scrollTo(0,y)};
-  if(t.dataset.signout!==undefined){admins=null;myName=null;wSel=null;wList=null;admMsg=admErr="";fauth.signOut();return}
+  if(t.dataset.signout!==undefined){admins=null;nfList=null;nfCode="";myName=null;wSel=null;wList=null;admMsg=admErr="";fauth.signOut();return}
   if(t.dataset.admrm){admRm=t.dataset.admrm;admMsg=admErr="";re();return}
   if(t.dataset.admrmNo!==undefined){admRm=null;re();return}
   if(t.dataset.admrmYes){const em=t.dataset.admrmYes;t.disabled=true;
     fdb.collection("admins").doc(em).delete().then(()=>{admins=admins.filter(a=>a.email!==em);admMsg="已移除。"}).catch(er=>{console.warn(er);admErr="移除失敗，請檢查網路。"}).finally(()=>{admRm=null;re()});return}
-  if(t.dataset.atab){if(t.dataset.atab==="price"&&adminTab!=="price"){mEdit=null;mMsg=mErr=""}if(t.dataset.atab==="lm")lmList=null;if(t.dataset.atab==="wallet"&&adminTab!=="wallet"){wList=null;wPanel=wSel?wPanel:null}if(t.dataset.atab==="cards"&&adminTab!=="cards"){cList=null;cMode=null;cMsg=cErr=""}adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
+  if(t.dataset.nfcopy!==undefined){const txt="綁定管理員 "+nfCode;(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>{nfMsg="已複製，可以貼給要收通知的人。";nfErr=""}).catch(()=>{nfErr="無法自動複製，請手動抄下這句話。";nfMsg=""}).finally(re);return}
+  if(t.dataset.nfnew!==undefined){const c=nfNewCode();t.disabled=true;fdb.collection("secure").doc("notify").set({bindCode:c,updatedAt:new Date().toISOString()}).then(()=>{nfCode=c;nfMsg="已換新暗號，舊暗號不能再用了。";nfErr=""}).catch(er=>{console.warn(er);nfErr="換暗號失敗，請檢查網路。";nfMsg=""}).finally(re);return}
+  if(t.dataset.nftoggle){const a=(nfList||[]).find(x=>x.uid===t.dataset.nftoggle);if(!a)return;const on=a.on===false;t.disabled=true;
+    fdb.collection("notifyAdmins").doc(a.uid).update({on}).then(()=>{a.on=on;nfMsg=on?"已恢復通知。":"已暫停通知。";nfErr=""}).catch(er=>{console.warn(er);nfErr="更新失敗，請檢查網路。";nfMsg=""}).finally(re);return}
+  if(t.dataset.nfrm){nfRm=t.dataset.nfrm;nfMsg=nfErr="";re();return}
+  if(t.dataset.nfrmNo!==undefined){nfRm=null;re();return}
+  if(t.dataset.nfrmYes){const id=t.dataset.nfrmYes;t.disabled=true;
+    fdb.collection("notifyAdmins").doc(id).delete().then(()=>{nfList=nfList.filter(x=>x.uid!==id);nfMsg="已移除。";nfErr=""}).catch(er=>{console.warn(er);nfErr="移除失敗，請檢查網路。";nfMsg=""}).finally(()=>{nfRm=null;re()});return}
+  if(t.dataset.atab){if(t.dataset.atab==="price"&&adminTab!=="price"){mEdit=null;mMsg=mErr=""}if(t.dataset.atab==="lm")lmList=null;if(t.dataset.atab==="set"){nfList=null;nfMsg=nfErr="";nfRm=null}if(t.dataset.atab==="wallet"&&adminTab!=="wallet"){wList=null;wPanel=wSel?wPanel:null}if(t.dataset.atab==="cards"&&adminTab!=="cards"){cList=null;cMode=null;cMsg=cErr=""}adminTab=t.dataset.atab;phoneMsg=phoneErr="";adminAct=null;renderAdmin();return}
   if(t.dataset.cmon){calMonth+=+t.dataset.cmon;re();return}
   if(t.dataset.cday){calDay=t.dataset.cday;adminAct=null;re();return}
   if(t.dataset.blk){const a=(SHOP.blocked=SHOP.blocked||{})[calDay]=(SHOP.blocked[calDay]||[]).slice(),i=a.indexOf(t.dataset.blk);i<0?a.push(t.dataset.blk):a.splice(i,1);a.sort();saveSettings();re();return}

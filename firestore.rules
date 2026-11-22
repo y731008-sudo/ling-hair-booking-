@@ -19,6 +19,15 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // 預約通知對象：文件編號是 LINE User ID；管理員在 LINE 傳暗號綁定（經過 Apps Script），只有店主能在後台查看、開關、移除
+    match /notifyAdmins/{uid} {
+      allow read, write: if isOwner();
+    }
+    // 只給店主看的設定（綁定通知用的暗號 secure/notify）
+    match /secure/{doc} {
+      allow read, write: if isOwner();
+    }
+
     // 店家設定（公休日、付款方式）與價目表 config/menu：大家可讀，只有店家能改
     match /config/{doc} {
       allow read: if true;
